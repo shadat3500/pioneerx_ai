@@ -1,0 +1,295 @@
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "binary"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  PRO_PLUS
+  ELITE
+}
+
+enum BusinessPhase {
+  IDEA
+  VALIDATION
+  SETUP
+  LAUNCH
+  GROWTH
+  SCALE
+  EXPANSION
+  WEALTH
+}
+
+enum TaskPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum IntegrationProvider {
+  SHOPIFY
+  GOOGLE_ANALYTICS
+}
+
+enum ModelRole {
+  PROPOSER_1
+  PROPOSER_2
+  PROPOSER_3
+  AGGREGATOR
+  DAILY_TASK_GENERATOR
+}
+
+// ─────────────────────────────────────────────
+// User & Profile
+// ─────────────────────────────────────────────
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String
+  name            String?
+  isEmailVerified Boolean  @default(false)
+  hashedRt        String?  // for refresh token rotation
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  businessProfile BusinessProfile?
+  integrations    Integration[]
+  generations     Generation[]
+  savedOutputs    SavedOutput[]
+  dailyTasks      DailyTask[]
+  subscription    Subscription?
+
+  @@map("users")
+}
+
+model BusinessProfile {
+  id           String        @id @default(uuid())
+  userId       String        @unique
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessName String?
+  industry     String?
+  currentPhase BusinessPhase @default(IDEA)
+  country      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@map("business_profiles")
+}
+
+// ─────────────────────────────────────────────
+// Subscription
+// ─────────────────────────────────────────────
+
+model Subscription {
+  id                      String           @id @default(uuid())
+  userId                  String           @unique
+  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier                    SubscriptionTier @default(FREE)
+  revenuecatEntitlementId String?
+  status                  String           @default("active")
+  renewsAt                DateTime?
+  updatedAt               DateTime         @updatedAt
+
+  @@map("subscriptions")
+}
+
+model QuotaConfig {
+  id                   String           @id @default(uuid())
+  tier                 SubscriptionTier @unique
+  dailyRegenerateLimit Int?             // null = unlimited (current default for all tiers)
+  updatedAt            DateTime         @updatedAt
+
+  @@map("quota_configs")
+}
+
+// ─────────────────────────────────────────────
+// Sections & Prompt Templates
+// ─────────────────────────────────────────────
+
+model Section {
+  id              String           @id @default(uuid())
+  key             String           @unique // e.g. "idea_validation"
+  name            String           // e.g. "Idea & Validation"
+  category        String           // core | advanced | pro_plus | elite
+  requiredTier    SubscriptionTier @default(FREE)
+  isActive        Boolean          @default(true)
+
+  promptTemplates PromptTemplate[]
+  toolCatalog     ToolCatalogItem[]
+  suggestedLinks  SuggestedLink[]
+  generations     Generation[]
+
+  @@map("sections")
+}
+
+model PromptTemplate {
+  id           String   @id @default(uuid())
+  sectionId    String
+  section      Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  systemPrompt String   @db.Text
+  version      Int      @default(1)
+  isActive     Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+
+  @@map("prompt_templates")
+}
+
+// ─────────────────────────────────────────────
+// AI Model Configuration
+// ─────────────────────────────────────────────
+
+model AiModelConfig {
+  id        String    @id @default(uuid())
+  role      ModelRole @unique
+  provider  String    // "openai" | "google" | "xai" | "anthropic"
+  modelId   String    // e.g. "gpt-4o", "gemini-1.5-pro", "grok-beta", "claude-3-opus-20240229"
+  isActive  Boolean   @default(true)
+  updatedAt DateTime  @updatedAt
+
+  @@map("ai_model_configs")
+}
+
+// ─────────────────────────────────────────────
+// Generation Pipeline
+// ─────────────────────────────────────────────
+
+model Generation {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sectionId         String
+  section           Section  @relation(fields: [sectionId], references: [id])
+  userPrompt        String   @db.Text
+  proposerResponses Json     // [{ role, modelId, raw, latencyMs }]
+  aggregatedResult  Json     // { action_steps, tools_features, suggested_links, ai_tip }
+  isSaved           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  actionSteps ActionStep[]
+  savedOutput SavedOutput?
+
+  @@map("generations")
+}
+
+model ActionStep {
+  id           String     @id @default(uuid())
+  generationId String
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  text         String
+  description  String?
+  isDone       Boolean    @default(false)
+  order        Int
+
+  @@map("action_steps")
+}
+
+model SavedOutput {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId String     @unique
+  generation   Generation @relation(fields: [generationId], references: [id])
+  label        String?
+  savedAt      DateTime   @default(now())
+
+  @@map("saved_outputs")
+}
+
+// ─────────────────────────────────────────────
+// Tool Catalog & Suggested Links
+// ─────────────────────────────────────────────
+
+model ToolCatalogItem {
+  id          String  @id @default(uuid())
+  sectionId   String
+  section     Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  linkType    String  // "internal" | "external"
+  url         String
+  isActive    Boolean @default(true)
+
+  @@map("tool_catalog_items")
+}
+
+model SuggestedLink {
+  id               String  @id @default(uuid())
+  sectionId        String
+  section          Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  label            String
+  targetSectionKey String?
+  externalUrl      String?
+
+  @@map("suggested_links")
+}
+
+// ─────────────────────────────────────────────
+// AI Tips
+// ─────────────────────────────────────────────
+
+model AiTip {
+  id       String  @id @default(uuid())
+  text     String
+  category String?
+  isActive Boolean @default(true)
+
+  @@map("ai_tips")
+}
+
+// ─────────────────────────────────────────────
+// Daily Tasks
+// ─────────────────────────────────────────────
+
+model DailyTask {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            DateTime // date-only; one record per user per day
+  tasks           Json     // [{ id, text, priority, isDone }]
+  regenerateCount Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, date])
+  @@map("daily_tasks")
+}
+
+// ─────────────────────────────────────────────
+// Third-party Integrations
+// ─────────────────────────────────────────────
+
+model Integration {
+  id           String              @id @default(uuid())
+  userId       String
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     IntegrationProvider
+  accessToken  String              // AES-256 encrypted at rest
+  refreshToken String?
+  status       String              @default("connected")
+  connectedAt  DateTime            @default(now())
+
+  @@map("integrations")
+}
+
+// ─────────────────────────────────────────────
+// Admin
+// ─────────────────────────────────────────────
+
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+
+  @@map("admin_users")
+}

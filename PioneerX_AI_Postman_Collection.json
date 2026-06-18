@@ -1,0 +1,1185 @@
+{
+	"info": {
+		"_postman_id": "pioneerx-ai-collection-id",
+		"name": "PioneerX AI API",
+		"description": "Professional API Collection for PioneerX AI Business Advisory Platform. Updated to match NestJS Backend v1.0.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\",\n    \"name\": \"John Doe\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/register",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.access_token) {",
+									"    pm.environment.set(\"access_token\", jsonData.data.access_token);",
+									"    pm.environment.set(\"refresh_token\", jsonData.data.refresh_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/login",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						}
+					}
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{refresh_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{url}}/auth/refresh",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"refresh"
+							]
+						}
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/auth/logout",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"logout"
+							]
+						}
+					}
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/forgot-password",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"forgot-password"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"otp\": \"123456\",\n    \"newPassword\": \"newpassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/reset-password",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"reset-password"
+							]
+						}
+					}
+				},
+				{
+					"name": "Verify Email",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"otp\": \"123456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/auth/verify-email",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"verify-email"
+							]
+						}
+					}
+				},
+				{
+					"name": "Resend Verification",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/auth/resend-verification",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"auth",
+								"resend-verification"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Business Profile",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/profile",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"profile"
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"businessName\": \"PioneerX Startups\",\n    \"industry\": \"Technology\",\n    \"currentPhase\": \"LAUNCH\",\n    \"country\": \"USA\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/profile",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"profile"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Sections",
+			"item": [
+				{
+					"name": "List Sections",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/sections",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"sections"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Section Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/sections/idea_validation",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"sections",
+								"idea_validation"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Generation (MoA)",
+			"item": [
+				{
+					"name": "Generate Advice",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"prompt\": \"How should I structure my marketing budget for the first 3 months?\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/sections/marketing/generate",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"sections",
+								"marketing",
+								"generate"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Generation Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/generations/:id",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"generations",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "generation-uuid"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Save Output",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"label\": \"Marketing Strategy Q3\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/generations/:id/save",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"generations",
+								":id",
+								"save"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "generation-uuid"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Unsave Output",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/generations/:id/save",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"generations",
+								":id",
+								"save"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "generation-uuid"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "List Saved Outputs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/saved-outputs",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"saved-outputs"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Daily Tasks",
+			"item": [
+				{
+					"name": "Get Today's Tasks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/daily-tasks/today",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"daily-tasks",
+								"today"
+							]
+						}
+					}
+				},
+				{
+					"name": "Toggle Task Status",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/daily-tasks/:id/toggle/:taskId",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"daily-tasks",
+								":id",
+								"toggle",
+								":taskId"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "daily-task-record-id"
+								},
+								{
+									"key": "taskId",
+									"value": "dt-1"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Regenerate Today's Tasks",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/daily-tasks/regenerate",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"daily-tasks",
+								"regenerate"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Integrations (Shopify)",
+			"item": [
+				{
+					"name": "Get Connect URL",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/integrations/shopify/connect?shop=mystore.myshopify.com",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"integrations",
+								"shopify",
+								"connect"
+							],
+							"query": [
+								{
+									"key": "shop",
+									"value": "mystore.myshopify.com"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Shopify Metrics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/integrations/shopify/metrics",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"integrations",
+								"shopify",
+								"metrics"
+							]
+						}
+					}
+				},
+				{
+					"name": "Disconnect Shopify",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/integrations/shopify/disconnect",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"integrations",
+								"shopify",
+								"disconnect"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Subscription",
+			"item": [
+				{
+					"name": "Get My Subscription",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{url}}/subscription/me",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"subscription",
+								"me"
+							]
+						}
+					}
+				},
+				{
+					"name": "RevenueCat Webhook (Simulate)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{revenuecat_secret}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"event\": {\n        \"type\": \"INITIAL_PURCHASE\",\n        \"app_user_id\": \"user-uuid-here\",\n        \"product_id\": \"pioneerx_pro_monthly\",\n        \"entitlement_id\": \"pro_features\",\n        \"expiration_at_ms\": 1720000000000\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/webhooks/revenuecat",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"webhooks",
+								"revenuecat"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "Admin Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.data && jsonData.data.access_token) {",
+									"    pm.environment.set(\"admin_token\", jsonData.data.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@pioneerx.ai\",\n    \"password\": \"adminpassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{url}}/admin/auth/login",
+							"host": [
+								"{{url}}"
+							],
+							"path": [
+								"admin",
+								"auth",
+								"login"
+							]
+						}
+					}
+				},
+				{
+					"name": "Sections",
+					"item": [
+						{
+							"name": "List Sections",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/sections",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"sections"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Section",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"requiredTier\": \"PRO\",\n    \"isActive\": true\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/sections/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"sections",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "section-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "AI Model Configs",
+					"item": [
+						{
+							"name": "List AI Configs",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/ai-configs",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-configs"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update AI Config",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"provider\": \"openai\",\n    \"modelId\": \"gpt-4o\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/ai-configs/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-configs",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "config-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Tool Catalog",
+					"item": [
+						{
+							"name": "List Tools",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/tool-catalog",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"tool-catalog"
+									]
+								}
+							}
+						},
+						{
+							"name": "Create Tool",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"sectionId\": \"section-uuid\",\n    \"name\": \"Marketing Calculator\",\n    \"description\": \"Internal ROI calculator\",\n    \"linkType\": \"internal\",\n    \"url\": \"/tools/marketing-roi\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/tool-catalog",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"tool-catalog"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Tool",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Updated Tool Name\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/tool-catalog/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"tool-catalog",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "tool-id"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Delete Tool",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/tool-catalog/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"tool-catalog",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "tool-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Prompt Templates",
+					"item": [
+						{
+							"name": "List Templates",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/prompt-templates",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"prompt-templates"
+									]
+								}
+							}
+						},
+						{
+							"name": "Create Template",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"sectionId\": \"section-uuid\",\n    \"systemPrompt\": \"You are an expert advisor...\",\n    \"version\": 1\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/prompt-templates",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"prompt-templates"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Template",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"systemPrompt\": \"Updated system prompt...\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/prompt-templates/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"prompt-templates",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "template-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Quota Configs",
+					"item": [
+						{
+							"name": "List Quotas",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/quota-configs",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"quota-configs"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Quota",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"dailyRegenerateLimit\": 5\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/quota-configs/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"quota-configs",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "quota-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "AI Tips",
+					"item": [
+						{
+							"name": "List Tips",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/ai-tips",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-tips"
+									]
+								}
+							}
+						},
+						{
+							"name": "Create Tip",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"text\": \"Always validate your ideas before scaling.\",\n    \"category\": \"General\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/ai-tips",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-tips"
+									]
+								}
+							}
+						},
+						{
+							"name": "Update Tip",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"text\": \"Updated tip text.\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{url}}/admin/ai-tips/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-tips",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "tip-id"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Delete Tip",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{url}}/admin/ai-tips/:id",
+									"host": [
+										"{{url}}"
+									],
+									"path": [
+										"admin",
+										"ai-tips",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "tip-id"
+										}
+									]
+								}
+							}
+						}
+					]
+				}
+			],
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{admin_token}}",
+						"type": "string"
+					}
+				]
+			}
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "url",
+			"value": "http://localhost:8083/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "admin_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "revenuecat_secret",
+			"value": "your-rc-secret",
+			"type": "string"
+		}
+	]
+}
