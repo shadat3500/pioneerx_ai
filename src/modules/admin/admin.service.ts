@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { AdminRepository } from './admin.repository';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { AiProviderService } from '../ai-provider/ai-provider.service';
 
 @Injectable()
 export class AdminService {
@@ -11,7 +12,8 @@ export class AdminService {
     private readonly repository: AdminRepository,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
-  ) {}
+    private readonly aiProvider: AiProviderService,
+  ) { }
 
   async login(dto: AdminLoginDto) {
     const admin = await this.repository.findByEmail(dto.email);
@@ -56,7 +58,9 @@ export class AdminService {
   }
 
   async updateAiModelConfig(id: string, data: any) {
-    return this.repository.updateAiModelConfig(id, data);
+    const updated = await this.repository.updateAiModelConfig(id, data);
+    await this.aiProvider.invalidateCache(updated.role);
+    return updated;
   }
 
   // ToolCatalogItem CRUD

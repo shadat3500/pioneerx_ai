@@ -4,17 +4,20 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger('ExceptionFilter');
   constructor(private configService: ConfigService) {}
 
   catch(exception: any, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
+    const request = ctx.getRequest<Request>();
     const env = this.configService.get<string>('NODE_ENV') || 'development';
 
     let status =
@@ -40,6 +43,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // Format message if it's a NestJS default validation error object
     if (typeof message === 'object' && (message as any).message) {
       message = (message as any).message;
+    }
+
+    // Log the error if it's a 500 or unknown exception
+    if (status >= 500) {
+      this.logger.error(
+        `${request.method} ${request.url} → ${exception.message || message}`,
+        exception.stack,
+      );
     }
 
     const errorResponse = {

@@ -5,6 +5,7 @@ import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { AdminRepository } from './admin.repository';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
+import { AiProviderModule } from '../ai-provider/ai-provider.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
         },
       }),
     }),
+    AiProviderModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminRepository, AdminJwtStrategy],

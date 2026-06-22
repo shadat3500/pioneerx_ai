@@ -101,7 +101,11 @@ JSON Schema:
     // Filter out failed proposals
     const successfulProposals = proposerResponses.filter((p) => p.success);
     if (successfulProposals.length === 0) {
-      throw new InternalServerErrorException('All proposer models failed to respond.');
+      // throw new InternalServerErrorException('All proposer models failed to respond.');
+      const firstFail = proposerResponses[0];
+      throw new InternalServerErrorException(
+        `Models failed. Reason: ${JSON.stringify(firstFail.raw)}`
+      );
     }
 
     // 6. Aggregate results

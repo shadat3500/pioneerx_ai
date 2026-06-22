@@ -36,3 +36,11 @@ Thumbs.db
 # Prisma
 /prisma/migrations
 # Note: Keeping the migrations is standard, but you can ignore certain prisma artifacts if needed
+
+PIONEERX_MASTER_SPEC_v1.1.md
+PIONEERX_MASTER_SPEC_v1.0.md
+PIONEERX_CHANGELOG_v1.0_to_v1.1.md
+db-commands.txt
+docker-commands.txt
+.logs.a3bf6aa0b8cd8fc1b0fb32925ede00716175f78d-audit.json
+.logs.bd882826cb2a9b912f36df4eb584b4c66c560fd8-audit.json

@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -10,6 +10,8 @@ import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersRepo: UsersRepository,
     private jwtService: JwtService,
@@ -30,11 +32,16 @@ export class AuthService {
       name: dto.name,
     });
 
-    // Send Welcome Email
-    await this.mailService.sendWelcomeEmail(newUser.email, newUser.name || 'User');
+    // Don't let a flaky/misconfigured mail provider fail the whole signup
+    try {
+      // Send Welcome Email
+      await this.mailService.sendWelcomeEmail(newUser.email, newUser.name || 'User');
 
-    // Send Verification Email
-    await this.resendVerificationEmail(newUser.email);
+      // Send Verification Email
+      await this.resendVerificationEmail(newUser.email);
+    } catch (err) {
+      this.logger.error(`Registration email step failed for ${newUser.email}: ${(err as any).message}`);
+    }
 
     const tokens = await this.getTokens(newUser.id, newUser.email);
     await this.updateRtHash(newUser.id, tokens.refresh_token);
