@@ -19,24 +19,6 @@ export class IntegrationRepository extends BaseRepository<Integration> {
     });
   }
 
-  async upsertMockIntegration(id: string, userId: string, provider: IntegrationProvider, accessToken: string, shop: string) {
-    return this.prisma.integration.upsert({
-      where: { id },
-      update: {
-        accessToken,
-        status: 'connected',
-        refreshToken: shop,
-      },
-      create: {
-        userId,
-        provider,
-        accessToken,
-        refreshToken: shop,
-        status: 'connected',
-      },
-    });
-  }
-
   async createIntegration(data: {
     userId: string;
     provider: IntegrationProvider;

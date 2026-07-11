@@ -70,12 +70,16 @@ export class SubscriptionService {
   }
 
   async getSubscriptionForUser(userId: string) {
+    const user = await this.repository.findUserById(userId);
     let sub = await this.repository.findByUserId(userId);
 
     if (!sub) {
       sub = await this.repository.createDefaultSubscription(userId);
     }
 
-    return sub;
+    return {
+      ...sub,
+      trialEndsAt: user?.trialEndsAt ?? null,
+    };
   }
 }

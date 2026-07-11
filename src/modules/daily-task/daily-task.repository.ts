@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
+import { DailyTask, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BaseRepository } from '../../common/repositories/base.repository';
-import { DailyTask } from '@prisma/client';
 
 @Injectable()
 export class DailyTaskRepository extends BaseRepository<DailyTask> {
@@ -9,11 +9,11 @@ export class DailyTaskRepository extends BaseRepository<DailyTask> {
     super(prisma, 'dailyTask');
   }
 
-  async findByUserAndDate(userId: string, date: Date) {
+  async findByProfileAndDate(businessProfileId: string, date: Date) {
     return this.prisma.dailyTask.findUnique({
       where: {
-        userId_date: {
-          userId,
+        businessProfileId_date: {
+          businessProfileId,
           date,
         },
       },
@@ -26,11 +26,83 @@ export class DailyTaskRepository extends BaseRepository<DailyTask> {
     });
   }
 
-  async upsertDailyTask(userId: string, date: Date, tasks: any, regenerateCount?: number) {
+  async hasAnyGeneration(businessProfileId: string) {
+    const count = await this.prisma.generation.count({
+      where: { businessProfileId },
+    });
+    return count > 0;
+  }
+
+  async findActionStepsForGeneration(generationId: string) {
+    return this.prisma.actionStep.findMany({
+      where: { generationId, isDone: false },
+      include: {
+        generation: {
+          include: { section: true },
+        },
+      },
+      orderBy: { order: 'asc' },
+    });
+  }
+
+  async findPendingActionStepsFromToday(businessProfileId: string, startOfDay: Date) {
+    return this.prisma.actionStep.findMany({
+      where: {
+        isDone: false,
+        generation: {
+          businessProfileId,
+          createdAt: { gte: startOfDay },
+        },
+      },
+      include: {
+        generation: {
+          include: { section: true },
+        },
+      },
+      orderBy: [{ generation: { createdAt: 'asc' } }, { order: 'asc' }],
+    });
+  }
+
+  async findAllPendingActionSteps(businessProfileId: string) {
+    return this.prisma.actionStep.findMany({
+      where: {
+        isDone: false,
+        generation: { businessProfileId },
+      },
+      include: {
+        generation: {
+          include: { section: true },
+        },
+      },
+      orderBy: [{ generation: { createdAt: 'desc' } }, { order: 'asc' }],
+    });
+  }
+
+  async findTodaysGenerations(businessProfileId: string, startOfDay: Date) {
+    return this.prisma.generation.findMany({
+      where: {
+        businessProfileId,
+        createdAt: { gte: startOfDay },
+      },
+      include: {
+        section: true,
+        actionSteps: { orderBy: { order: 'asc' } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async upsertDailyTask(
+    userId: string,
+    businessProfileId: string,
+    date: Date,
+    tasks: Prisma.InputJsonValue,
+    regenerateCount?: number,
+  ) {
     return this.prisma.dailyTask.upsert({
       where: {
-        userId_date: {
-          userId,
+        businessProfileId_date: {
+          businessProfileId,
           date,
         },
       },
@@ -40,6 +112,7 @@ export class DailyTaskRepository extends BaseRepository<DailyTask> {
       },
       create: {
         userId,
+        businessProfileId,
         date,
         tasks,
         regenerateCount: regenerateCount || 0,
@@ -47,7 +120,7 @@ export class DailyTaskRepository extends BaseRepository<DailyTask> {
     });
   }
 
-  async updateTasks(id: string, tasks: any) {
+  async updateTasks(id: string, tasks: Prisma.InputJsonValue) {
     return this.prisma.dailyTask.update({
       where: { id },
       data: { tasks },
@@ -59,25 +132,5 @@ export class DailyTaskRepository extends BaseRepository<DailyTask> {
       where: { id },
       data: { regenerateCount: count },
     });
-  }
-
-  async findBusinessProfile(userId: string) {
-    return this.prisma.businessProfile.findUnique({
-      where: { userId },
-    });
-  }
-
-  async createBusinessProfile(userId: string) {
-    return this.prisma.businessProfile.create({
-      data: { userId, currentPhase: 'IDEA' },
-    });
-  }
-
-  async getActiveUserIds(limit: number = 100): Promise<string[]> {
-    const users = await this.prisma.user.findMany({
-      select: { id: true },
-      take: limit,
-    });
-    return users.map((u) => u.id);
   }
 }

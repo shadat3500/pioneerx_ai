@@ -6,6 +6,7 @@ import { AdminService } from './admin.service';
 import { AdminRepository } from './admin.repository';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
 import { AiProviderModule } from '../ai-provider/ai-provider.module';
+import { TokenModule } from '../token/token.module';
 
 @Module({
   imports: [
@@ -14,11 +15,12 @@ import { AiProviderModule } from '../ai-provider/ai-provider.module';
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('JWT_AT_SECRET'),
         signOptions: {
-          expiresIn: (config.get<string>('JWT_AT_EXPIRES_IN') || '15m') as any,
+          expiresIn: (config.get<string>('JWT_AT_EXPIRES_IN')) as any,
         },
       }),
     }),
     AiProviderModule,
+    TokenModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminRepository, AdminJwtStrategy],

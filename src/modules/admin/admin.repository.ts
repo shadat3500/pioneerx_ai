@@ -123,4 +123,106 @@ export class AdminRepository extends BaseRepository<AdminUser> {
       where: { id },
     });
   }
+
+  // ModelPricing CRUD
+  async findAllModelPricings() {
+    return this.prisma.modelPricing.findMany({
+      orderBy: [{ provider: 'asc' }, { modelId: 'asc' }],
+    });
+  }
+
+  async createModelPricing(data: {
+    provider: string;
+    modelId: string;
+    inputPricePerMToken: number;
+    outputPricePerMToken: number;
+  }) {
+    return this.prisma.modelPricing.create({ data });
+  }
+
+  async updateModelPricing(
+    id: string,
+    data: { inputPricePerMToken?: number; outputPricePerMToken?: number },
+  ) {
+    return this.prisma.modelPricing.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteModelPricing(id: string) {
+    return this.prisma.modelPricing.delete({
+      where: { id },
+    });
+  }
+
+  async findModelPricingById(id: string) {
+    return this.prisma.modelPricing.findUnique({ where: { id } });
+  }
+
+  // Token dashboard aggregation
+  async findTokenUsageForDashboard(filters: {
+    from?: Date;
+    to?: Date;
+    tier?: string;
+    provider?: string;
+    email?: string;
+  }) {
+    return this.prisma.tokenUsage.findMany({
+      where: {
+        date: {
+          ...(filters.from ? { gte: filters.from } : {}),
+          ...(filters.to ? { lte: filters.to } : {}),
+        },
+        ...(filters.provider ? { provider: filters.provider } : {}),
+        user: {
+          ...(filters.email
+            ? { email: { contains: filters.email, mode: 'insensitive' as const } }
+            : {}),
+          ...(filters.tier
+            ? { subscription: { tier: filters.tier as any } }
+            : {}),
+        },
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            trialEndsAt: true,
+            subscription: { select: { tier: true } },
+          },
+        },
+      },
+    });
+  }
+
+  // Admin user overview
+  async findUsersOverview(skip: number, take: number) {
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          isEmailVerified: true,
+          trialEndsAt: true,
+          createdAt: true,
+          subscription: {
+            select: {
+              tier: true,
+              status: true,
+              renewsAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.user.count(),
+    ]);
+
+    return { data, total };
+  }
 }

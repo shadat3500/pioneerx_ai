@@ -46,6 +46,7 @@ enum ModelRole {
   PROPOSER_3
   AGGREGATOR
   DAILY_TASK_GENERATOR
+  FREE_TIER_MODEL
 }
 
 // ─────────────────────────────────────────────
@@ -53,28 +54,31 @@ enum ModelRole {
 // ─────────────────────────────────────────────
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
+  id              String    @id @default(uuid())
+  email           String    @unique
   passwordHash    String
   name            String?
-  isEmailVerified Boolean  @default(false)
-  hashedRt        String?  // for refresh token rotation
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isEmailVerified Boolean   @default(false)
+  hashedRt        String?   // for refresh token rotation
+  trialEndsAt     DateTime?
+  activeProfileId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  businessProfile BusinessProfile?
-  integrations    Integration[]
-  generations     Generation[]
-  savedOutputs    SavedOutput[]
-  dailyTasks      DailyTask[]
-  subscription    Subscription?
+  businessProfiles BusinessProfile[]
+  integrations     Integration[]
+  generations      Generation[]
+  savedOutputs     SavedOutput[]
+  dailyTasks       DailyTask[]
+  subscription     Subscription?
+  tokenUsage       TokenUsage[]
 
   @@map("users")
 }
 
 model BusinessProfile {
   id           String        @id @default(uuid())
-  userId       String        @unique
+  userId       String
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessName String?
   industry     String?
@@ -83,6 +87,11 @@ model BusinessProfile {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
+  generations  Generation[]
+  savedOutputs SavedOutput[]
+  dailyTasks   DailyTask[]
+
+  @@index([userId])
   @@map("business_profiles")
 }
 
@@ -106,10 +115,40 @@ model Subscription {
 model QuotaConfig {
   id                   String           @id @default(uuid())
   tier                 SubscriptionTier @unique
+  dailyTokenLimit      Int?             // null = unlimited
   dailyRegenerateLimit Int?             // null = unlimited (current default for all tiers)
   updatedAt            DateTime         @updatedAt
 
   @@map("quota_configs")
+}
+
+model TokenUsage {
+  id               String      @id @default(uuid())
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generationId     String?
+  generation       Generation? @relation(fields: [generationId], references: [id], onDelete: SetNull)
+  provider         String
+  modelId          String
+  inputTokens      Int
+  outputTokens     Int
+  estimatedCostUsd Float
+  date             DateTime    @default(now())
+
+  @@index([userId, date])
+  @@map("token_usages")
+}
+
+model ModelPricing {
+  id                   String   @id @default(uuid())
+  provider             String
+  modelId              String
+  inputPricePerMToken  Float
+  outputPricePerMToken Float
+  effectiveFrom        DateTime @default(now())
+
+  @@unique([provider, modelId])
+  @@map("model_pricings")
 }
 
 // ─────────────────────────────────────────────
@@ -164,20 +203,24 @@ model AiModelConfig {
 // ─────────────────────────────────────────────
 
 model Generation {
-  id                String   @id @default(uuid())
+  id                String          @id @default(uuid())
   userId            String
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
   sectionId         String
-  section           Section  @relation(fields: [sectionId], references: [id])
-  userPrompt        String   @db.Text
-  proposerResponses Json     // [{ role, modelId, raw, latencyMs }]
-  aggregatedResult  Json     // { action_steps, tools_features, suggested_links, ai_tip }
-  isSaved           Boolean  @default(false)
-  createdAt         DateTime @default(now())
+  section           Section         @relation(fields: [sectionId], references: [id])
+  userPrompt        String          @db.Text
+  proposerResponses Json            // [{ role, modelId, raw, latencyMs }]
+  aggregatedResult  Json            // { action_steps, tools_features, ai_suggested_tools, suggested_links, ai_tip }
+  isSaved           Boolean         @default(false)
+  createdAt         DateTime        @default(now())
 
   actionSteps ActionStep[]
   savedOutput SavedOutput?
+  tokenUsage  TokenUsage[]
 
+  @@index([businessProfileId])
   @@map("generations")
 }
 
@@ -194,14 +237,17 @@ model ActionStep {
 }
 
 model SavedOutput {
-  id           String     @id @default(uuid())
-  userId       String
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  generationId String     @unique
-  generation   Generation @relation(fields: [generationId], references: [id])
-  label        String?
-  savedAt      DateTime   @default(now())
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  generationId      String          @unique
+  generation        Generation      @relation(fields: [generationId], references: [id])
+  label             String?
+  savedAt           DateTime        @default(now())
 
+  @@index([businessProfileId])
   @@map("saved_outputs")
 }
 
@@ -251,15 +297,18 @@ model AiTip {
 // ─────────────────────────────────────────────
 
 model DailyTask {
-  id              String   @id @default(uuid())
-  userId          String
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  date            DateTime // date-only; one record per user per day
-  tasks           Json     // [{ id, text, priority, isDone }]
-  regenerateCount Int      @default(0)
-  createdAt       DateTime @default(now())
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  date              DateTime        // date-only; one record per profile per day
+  tasks             Json            // [{ id, text, priority, isDone }]
+  regenerateCount   Int             @default(0)
+  createdAt         DateTime        @default(now())
 
-  @@unique([userId, date])
+  @@unique([businessProfileId, date])
+  @@index([userId])
   @@map("daily_tasks")
 }
 
@@ -292,4 +341,19 @@ model AdminUser {
   createdAt    DateTime @default(now())
 
   @@map("admin_users")
+}
+
+// ─────────────────────────────────────────────
+// Magic Link Authentication
+// ─────────────────────────────────────────────
+
+model MagicLinkToken {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }

@@ -41,4 +41,13 @@ export class SubscriptionRepository extends BaseRepository<Subscription> {
       },
     });
   }
+
+  async findUsersWithExpiredTrial(now: Date) {
+    return this.prisma.user.findMany({
+      where: {
+        trialEndsAt: { lt: now },
+      },
+      include: { subscription: true },
+    });
+  }
 }

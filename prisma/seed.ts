@@ -41,14 +41,29 @@ async function main() {
   for (const tier of tiers) {
     await prisma.quotaConfig.upsert({
       where: { tier },
-      update: {},
+      update: { dailyTokenLimit: null },
       create: {
         tier,
+        dailyTokenLimit: null,
         dailyRegenerateLimit: null, // unlimited
       },
     });
   }
   console.log('✅ Quota configurations seeded.');
+
+  // 2b. Seed ModelPricing
+  await prisma.modelPricing.createMany({
+    data: [
+      { provider: 'openai', modelId: 'gpt-5.5', inputPricePerMToken: 2.5, outputPricePerMToken: 10.0 },
+      { provider: 'google', modelId: 'gemini-3.1-pro', inputPricePerMToken: 2.0, outputPricePerMToken: 12.0 },
+      { provider: 'google', modelId: 'gemini-3.5-flash', inputPricePerMToken: 0.5, outputPricePerMToken: 3.0 },
+      { provider: 'xai', modelId: 'grok-4.3', inputPricePerMToken: 0.2, outputPricePerMToken: 0.5 },
+      { provider: 'anthropic', modelId: 'claude-opus-4-8', inputPricePerMToken: 5.0, outputPricePerMToken: 25.0 },
+      { provider: 'anthropic', modelId: 'claude-sonnet-4-6', inputPricePerMToken: 1.0, outputPricePerMToken: 5.0 },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('✅ Model pricing seeded.');
 
   // 3. Seed AiModelConfig (Default Model Roles)
   const defaultModelConfigs = [
@@ -74,8 +89,13 @@ async function main() {
     },
     {
       role: ModelRole.DAILY_TASK_GENERATOR,
-      provider: 'anthropic',
-      modelId: 'claude-3-5-sonnet-latest',
+      provider: 'google',
+      modelId: 'gemini-3.5-flash',
+    },
+    {
+      role: ModelRole.FREE_TIER_MODEL,
+      provider: 'google',
+      modelId: 'gemini-3.5-flash',
     },
   ];
 

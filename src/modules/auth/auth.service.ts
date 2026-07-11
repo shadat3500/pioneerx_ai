@@ -1,12 +1,20 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomBytes } from 'crypto';
 import { UsersRepository } from '../users/users.repository';
-import { ForgotPasswordDto, LoginDto, RegisterDto, ResetPasswordDto, VerifyEmailDto } from './dto/auth.dto';
+import { ForgotPasswordDto, LoginDto, RegisterDto, RequestMagicLinkDto, ResetPasswordDto, VerifyEmailDto } from './dto/auth.dto';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { MailService } from '../mail/mail.service';
+import { PrismaService } from '../../prisma/prisma.service';
+import { BusinessProfileService } from '../business-profile/business-profile.service';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +26,8 @@ export class AuthService {
     private config: ConfigService,
     @InjectRedis() private readonly redis: Redis,
     private mailService: MailService,
+    private prisma: PrismaService,
+    private businessProfileService: BusinessProfileService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -30,7 +40,10 @@ export class AuthService {
       email: dto.email,
       passwordHash: hash,
       name: dto.name,
+      trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     });
+
+    await this.businessProfileService.resolveActiveProfile(newUser.id);
 
     // Don't let a flaky/misconfigured mail provider fail the whole signup
     try {
@@ -52,10 +65,48 @@ export class AuthService {
   async login(dto: LoginDto) {
     const user = await this.usersRepo.findByEmail(dto.email);
 
-    if (!user) throw new ForbiddenException('Access Denied');
+    if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
 
     const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatches) throw new ForbiddenException('Access Denied');
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const tokens = await this.getTokens(user.id, user.email);
+    await this.updateRtHash(user.id, tokens.refresh_token);
+
+    return tokens;
+  }
+
+  async oauthLogin(profile: { email?: string; name?: string }) {
+    if (!profile.email) {
+      throw new BadRequestException('Email not provided by OAuth provider');
+    }
+
+    let user = await this.usersRepo.findByEmail(profile.email);
+
+    if (!user) {
+      const randomPassword = randomBytes(32).toString('hex');
+      const hash = await this.hashData(randomPassword);
+
+      user = await this.usersRepo.create({
+        email: profile.email,
+        passwordHash: hash,
+        name: profile.name,
+        isEmailVerified: true,
+        trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      });
+
+      await this.businessProfileService.resolveActiveProfile(user.id);
+
+      try {
+        await this.mailService.sendWelcomeEmail(user.email, user.name || 'User');
+      } catch (err) {
+        this.logger.error(`OAuth welcome email failed for ${user.email}: ${(err as any).message}`);
+      }
+    }
 
     const tokens = await this.getTokens(user.id, user.email);
     await this.updateRtHash(user.id, tokens.refresh_token);
@@ -146,10 +197,14 @@ export class AuthService {
   async refreshTokens(userId: string, rt: string) {
     const user = await this.usersRepo.findById(userId);
 
-    if (!user || !user.hashedRt) throw new ForbiddenException('Access Denied');
+    if (!user || !user.hashedRt) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
 
     const rtMatches = await bcrypt.compare(rt, user.hashedRt);
-    if (!rtMatches) throw new ForbiddenException('Access Denied');
+    if (!rtMatches) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
 
     const tokens = await this.getTokens(user.id, user.email);
     await this.updateRtHash(user.id, tokens.refresh_token);
@@ -174,7 +229,7 @@ export class AuthService {
         { sub: userId, email },
         {
           secret: this.config.get<string>('JWT_AT_SECRET'),
-          expiresIn: (this.config.get<string>('JWT_AT_EXPIRES_IN') || '15m') as any,
+          expiresIn: (this.config.get<string>('JWT_AT_EXPIRES_IN')) as any,
         },
       ),
       this.jwtService.signAsync(
@@ -190,5 +245,88 @@ export class AuthService {
       access_token: at,
       refresh_token: rt,
     };
+  }
+
+  // ─────────────────────────────────────────────
+  // Magic Link Auth
+  // ─────────────────────────────────────────────
+
+  async requestMagicLink(dto: RequestMagicLinkDto) {
+    let user = await this.usersRepo.findByEmail(dto.email);
+
+    if (!user) {
+      // New user — create with random password hash and 3-day trial
+      const randomPassword = randomBytes(32).toString('hex');
+      const hash = await this.hashData(randomPassword);
+      user = await this.usersRepo.create({
+        email: dto.email,
+        passwordHash: hash,
+        trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+      });
+
+      await this.businessProfileService.resolveActiveProfile(user.id);
+    }
+
+    // Generate secure random token
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Save token to DB
+    await this.prisma.magicLinkToken.create({
+      data: {
+        email: dto.email,
+        token,
+        expiresAt,
+      },
+    });
+
+    // Build verification URL
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const verifyLink = `${frontendUrl}/auth/verify?token=${token}`;
+
+    // Send email (non-blocking — error is logged but does not crash)
+    try {
+      await this.mailService.sendMail(
+        dto.email,
+        'Your PioneerX login link',
+        `<p>Click the link below to log in. This link expires in 15 minutes and can only be used once.</p>
+<p><a href="${verifyLink}">${verifyLink}</a></p>
+<p>If you didn't request this, ignore this email.</p>`,
+      );
+    } catch (err) {
+      this.logger.error(`Magic link email failed for ${dto.email}: ${(err as any).message}`);
+    }
+
+    // Always return same message to prevent email enumeration
+    return { message: 'Check your email' };
+  }
+
+  async verifyMagicLink(token: string) {
+    const record = await this.prisma.magicLinkToken.findUnique({
+      where: { token },
+    });
+
+    if (!record) throw new BadRequestException('Invalid link');
+    if (record.used) throw new BadRequestException('Link already used');
+    if (record.expiresAt < new Date()) throw new BadRequestException('Link expired');
+
+    // Mark token as used
+    await this.prisma.magicLinkToken.update({
+      where: { token },
+      data: { used: true },
+    });
+
+    const user = await this.usersRepo.findByEmail(record.email);
+    if (!user) throw new BadRequestException('User not found');
+
+    // Mark email as verified if not already
+    if (!user.isEmailVerified) {
+      await this.usersRepo.update(user.id, { isEmailVerified: true });
+    }
+
+    const tokens = await this.getTokens(user.id, user.email);
+    await this.updateRtHash(user.id, tokens.refresh_token);
+
+    return tokens;
   }
 }

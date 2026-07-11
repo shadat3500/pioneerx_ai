@@ -29,10 +29,23 @@ export const validationSchema = Joi.object({
   SHOPIFY_API_KEY: Joi.string().allow('').optional(),
   SHOPIFY_API_SECRET: Joi.string().allow('').optional(),
 
-  // AI Provider Keys (Optional to allow fallback/mock for local run)
+  // AI Provider Keys
   OPENAI_API_KEY: Joi.string().allow('').optional(),
   GOOGLE_AI_API_KEY: Joi.string().allow('').optional(),
   XAI_API_KEY: Joi.string().allow('').optional(),
   ANTHROPIC_API_KEY: Joi.string().allow('').optional(),
+
+  // OAuth
+  GOOGLE_CLIENT_ID: Joi.string().allow('').optional(),
+  GOOGLE_CLIENT_SECRET: Joi.string().allow('').optional(),
+  GOOGLE_CALLBACK_URL: Joi.string().allow('').optional(),
+  APPLE_CLIENT_ID: Joi.string().allow('').optional(),
+  APPLE_TEAM_ID: Joi.string().allow('').optional(),
+  APPLE_KEY_ID: Joi.string().allow('').optional(),
+  APPLE_PRIVATE_KEY: Joi.string().allow('').optional(),
+
+  // Frontend URL (used for magic link verification link)
+  FRONTEND_URL: Joi.string().allow('').optional(),
 });
+
 

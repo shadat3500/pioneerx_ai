@@ -15,22 +15,17 @@ export class GenerationRepository extends BaseRepository<Generation> {
     });
   }
 
+  async findUserForGeneration(userId: string) {
+    return this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { subscription: true },
+    });
+  }
+
   async findActivePromptTemplate(sectionId: string) {
     return this.prisma.promptTemplate.findFirst({
       where: { sectionId, isActive: true },
       orderBy: { version: 'desc' },
-    });
-  }
-
-  async findBusinessProfile(userId: string) {
-    return this.prisma.businessProfile.findUnique({
-      where: { userId },
-    });
-  }
-
-  async createBusinessProfile(userId: string) {
-    return this.prisma.businessProfile.create({
-      data: { userId, currentPhase: 'IDEA' },
     });
   }
 
@@ -42,6 +37,7 @@ export class GenerationRepository extends BaseRepository<Generation> {
 
   async createFullGeneration(data: {
     userId: string;
+    businessProfileId: string;
     sectionId: string;
     userPrompt: string;
     proposerResponses: any;
@@ -52,6 +48,7 @@ export class GenerationRepository extends BaseRepository<Generation> {
       const generation = await tx.generation.create({
         data: {
           userId: data.userId,
+          businessProfileId: data.businessProfileId,
           sectionId: data.sectionId,
           userPrompt: data.userPrompt,
           proposerResponses: data.proposerResponses,
@@ -90,12 +87,18 @@ export class GenerationRepository extends BaseRepository<Generation> {
     });
   }
 
-  async upsertSavedOutput(userId: string, generationId: string, label: string) {
+  async upsertSavedOutput(
+    userId: string,
+    businessProfileId: string,
+    generationId: string,
+    label: string,
+  ) {
     return this.prisma.savedOutput.upsert({
       where: { generationId },
-      update: { label },
+      update: { label, businessProfileId },
       create: {
         userId,
+        businessProfileId,
         generationId,
         label,
       },
@@ -114,9 +117,9 @@ export class GenerationRepository extends BaseRepository<Generation> {
     });
   }
 
-  async getUserSavedOutputs(userId: string) {
+  async getSavedOutputs(userId: string, businessProfileId: string) {
     return this.prisma.savedOutput.findMany({
-      where: { userId },
+      where: { userId, businessProfileId },
       include: {
         generation: {
           include: {

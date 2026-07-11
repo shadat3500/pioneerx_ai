@@ -8,13 +8,18 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { CreateModelPricingDto, UpdateModelPricingDto } from './dto/model-pricing.dto';
+import { UpdateQuotaConfigDto } from './dto/quota-config.dto';
+import { TokenDashboardQueryDto } from './dto/token-dashboard-query.dto';
 import { AdminAuthGuard } from './guards/admin-auth.guard';
 import { Public } from '../auth/decorators/public.decorator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -141,9 +146,63 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   @Public()
   @Patch('quota-configs/:id')
-  @ApiOperation({ summary: 'Update a quota config' })
-  updateQuotaConfig(@Param('id') id: string, @Body() body: any) {
+  @ApiOperation({ summary: 'Update a quota config (dailyTokenLimit, dailyRegenerateLimit)' })
+  updateQuotaConfig(@Param('id') id: string, @Body() body: UpdateQuotaConfigDto) {
     return this.adminService.updateQuotaConfig(id, body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('model-pricings')
+  @ApiOperation({ summary: 'Get all model pricing rows' })
+  getModelPricings() {
+    return this.adminService.getModelPricings();
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Post('model-pricings')
+  @ApiOperation({ summary: 'Create a model pricing row' })
+  createModelPricing(@Body() body: CreateModelPricingDto) {
+    return this.adminService.createModelPricing(body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Patch('model-pricings/:id')
+  @ApiOperation({ summary: 'Update a model pricing row' })
+  updateModelPricing(@Param('id') id: string, @Body() body: UpdateModelPricingDto) {
+    return this.adminService.updateModelPricing(id, body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Delete('model-pricings/:id')
+  @ApiOperation({ summary: 'Delete a model pricing row' })
+  deleteModelPricing(@Param('id') id: string) {
+    return this.adminService.deleteModelPricing(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('token-dashboard')
+  @ApiOperation({ summary: 'Aggregated token usage and cost report' })
+  getTokenDashboard(@Query() query: TokenDashboardQueryDto) {
+    return this.adminService.getTokenDashboard(query);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('users')
+  @ApiOperation({ summary: 'List users with subscription tier and trial status' })
+  getUsers(@Query() pagination: PaginationDto) {
+    return this.adminService.getUsers(pagination);
   }
 
   @ApiBearerAuth()

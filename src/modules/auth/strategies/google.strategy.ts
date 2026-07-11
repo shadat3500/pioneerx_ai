@@ -6,28 +6,34 @@ import { Strategy } from 'passport-google-oauth20';
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(config: ConfigService) {
+    const clientID = config.get<string>('GOOGLE_CLIENT_ID')!;
+    const clientSecret = config.get<string>('GOOGLE_CLIENT_SECRET')!;
+    const baseUrl = config.get<string>('BASE_URL') || 'http://localhost:3000';
+    const callbackURL =
+      config.get<string>('GOOGLE_CALLBACK_URL') ||
+      `${baseUrl}/api/v1/auth/google/callback`;
+
     super({
-      clientID: config.get('GOOGLE_CLIENT_ID') || 'placeholder-id',
-      clientSecret: config.get('GOOGLE_CLIENT_SECRET') || 'placeholder-secret',
-      callbackURL: `${config.get('BASE_URL')}/api/v1/auth/google/callback`,
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['email', 'profile'],
     });
   }
 
-  async validate(
-    accessToken: string,
+  validate(
+    _accessToken: string,
     _refreshToken: string,
-    profile: any,
-    done: any,
-  ): Promise<any> {
-    const { name, emails, photos } = profile;
-    const user = {
-      email: emails[0].value,
-      firstName: name.givenName,
-      lastName: name.familyName,
-      picture: photos[0].value,
-      accessToken,
-    };
-    done(null, user);
+    profile: {
+      name?: { givenName?: string; familyName?: string };
+      emails?: { value: string }[];
+    },
+  ) {
+    const email = profile.emails?.[0]?.value;
+    const name = [profile.name?.givenName, profile.name?.familyName]
+      .filter(Boolean)
+      .join(' ');
+
+    return { email, name: name || undefined };
   }
 }

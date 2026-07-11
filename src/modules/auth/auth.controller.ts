@@ -1,12 +1,16 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
+  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { GetCurrentUser } from './decorators/get-current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -14,6 +18,7 @@ import {
   ForgotPasswordDto,
   LoginDto,
   RegisterDto,
+  RequestMagicLinkDto,
   ResetPasswordDto,
   VerifyEmailDto,
 } from './dto/auth.dto';
@@ -90,5 +95,57 @@ export class AuthController {
   @ApiOperation({ summary: 'Resend verification email to current user' })
   resendVerification(@GetCurrentUser('email') email: string) {
     return this.authService.resendVerificationEmail(email);
+  }
+
+  @Public()
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  googleAuth() {
+    // Passport redirects to Google
+  }
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  googleAuthCallback(@Req() req: { user: { email?: string; name?: string } }) {
+    return this.authService.oauthLogin(req.user);
+  }
+
+  @Public()
+  @Get('apple')
+  @UseGuards(AuthGuard('apple'))
+  @ApiOperation({ summary: 'Initiate Apple OAuth login' })
+  appleAuth() {
+    // Passport redirects to Apple
+  }
+
+  @Public()
+  @Post('apple/callback')
+  @UseGuards(AuthGuard('apple'))
+  @ApiOperation({ summary: 'Apple OAuth callback' })
+  appleAuthCallback(@Req() req: { user: { email?: string; name?: string } }) {
+    return this.authService.oauthLogin(req.user);
+  }
+
+  // ─────────────────────────────────────────────
+  // Magic Link
+  // ─────────────────────────────────────────────
+
+  @Public()
+  @Post('magic-link')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request a magic link login email' })
+  requestMagicLink(@Body() dto: RequestMagicLinkDto) {
+    return this.authService.requestMagicLink(dto);
+  }
+
+  @Public()
+  @Get('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify magic link token and issue JWT' })
+  verifyMagicLink(@Query('token') token: string) {
+    return this.authService.verifyMagicLink(token);
   }
 }

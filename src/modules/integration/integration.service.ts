@@ -12,43 +12,29 @@ export class IntegrationService {
   constructor(
     private readonly repository: IntegrationRepository,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
 
-  /**
-   * Generates authorization URL to start Shopify OAuth flow
-   */
   getShopifyAuthUrl(shop: string, userId: string): string {
     const apiKey = this.config.get<string>('SHOPIFY_API_KEY');
     const baseUrl = this.config.get<string>('BASE_URL') || 'http://localhost:8083';
     const redirectUri = `${baseUrl}/api/v1/integrations/shopify/callback`;
     const scopes = 'read_orders,read_customers';
-    const state = userId; // simple tracking state
+    const state = userId;
 
     if (!apiKey) {
-      this.logger.warn('SHOPIFY_API_KEY is missing. OAuth redirect will use dummy placeholders.');
+      throw new BadRequestException('Shopify integration is not configured (SHOPIFY_API_KEY missing)');
     }
 
-    return `https://${shop}/admin/oauth/authorize?client_id=${apiKey || 'dummy'}&scope=${scopes}&redirect_uri=${redirectUri}&state=${state}`;
+    return `https://${shop}/admin/oauth/authorize?client_id=${apiKey}&scope=${scopes}&redirect_uri=${redirectUri}&state=${state}`;
   }
 
-  /**
-   * Exchanges temporary OAuth code for access token and saves it encrypted
-   */
   async handleShopifyCallback(shop: string, code: string, userId: string) {
     const apiKey = this.config.get<string>('SHOPIFY_API_KEY');
     const apiSecret = this.config.get<string>('SHOPIFY_API_SECRET');
 
     if (!apiKey || !apiSecret) {
-      // Create a mock connection for developer flow
-      this.logger.warn('Missing Shopify API keys. Creating a mock integration connection.');
-      const mockTokenEncrypted = CryptoUtil.encrypt('mock-shopify-access-token');
-
-      return this.repository.upsertMockIntegration(
-        `mock-shopify-${userId}`,
-        userId,
-        IntegrationProvider.SHOPIFY,
-        mockTokenEncrypted,
-        shop,
+      throw new BadRequestException(
+        'Shopify integration is not configured (SHOPIFY_API_KEY or SHOPIFY_API_SECRET missing)',
       );
     }
 
@@ -64,25 +50,24 @@ export class IntegrationService {
         throw new BadRequestException('Failed to retrieve access token from Shopify');
       }
 
-      // Encrypt accessToken before storing
       const encryptedToken = CryptoUtil.encrypt(accessToken);
 
       return await this.repository.createIntegration({
         userId,
         provider: IntegrationProvider.SHOPIFY,
         accessToken: encryptedToken,
-        refreshToken: shop, // using refreshToken column to store shop URL
+        refreshToken: shop,
         status: 'connected',
       });
     } catch (err) {
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       this.logger.error(`Shopify Token Exchange Error: ${(err as any).message}`);
       throw new BadRequestException(`Shopify connection failed: ${(err as any).message}`);
     }
   }
 
-  /**
-   * Retrieves aggregated Shopify metrics (orders and customers) or returns mock demo metrics
-   */
   async getShopifyMetrics(userId: string) {
     const integration = await this.repository.findByUserIdAndProvider(
       userId,
@@ -90,7 +75,6 @@ export class IntegrationService {
     );
 
     if (!integration) {
-      // Return a demo mock metrics response if not connected
       return {
         connected: false,
         revenue: 0,
@@ -102,41 +86,32 @@ export class IntegrationService {
     }
 
     const decryptedToken = CryptoUtil.decrypt(integration.accessToken);
-    const shop = integration.refreshToken; // stores shop domain name
+    const shop = integration.refreshToken;
 
-    // If it's a mock token, return mock analytics values
-    if (decryptedToken === 'mock-shopify-access-token' || !shop) {
-      return {
-        connected: true,
-        revenue: 24590.80,
-        orderCount: 184,
-        customerCount: 112,
-        growthRate: 18.5,
-        isMockData: true,
-      };
+    if (!shop) {
+      throw new BadRequestException('Shopify shop domain is missing from integration record');
     }
 
     try {
-      // 1. Fetch Orders
       const ordersRes = await axios.get(
         `https://${shop}/admin/api/2024-04/orders.json?status=any&limit=250`,
         { headers: { 'X-Shopify-Access-Token': decryptedToken } },
       );
       const orders = ordersRes.data.orders || [];
 
-      // 2. Fetch Customers
       const customersRes = await axios.get(
         `https://${shop}/admin/api/2024-04/customers.json?limit=250`,
         { headers: { 'X-Shopify-Access-Token': decryptedToken } },
       );
       const customers = customersRes.data.customers || [];
 
-      // 3. Compute Metrics
-      const totalRevenue = orders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || '0'), 0);
+      const totalRevenue = orders.reduce(
+        (sum: number, o: any) => sum + parseFloat(o.total_price || '0'),
+        0,
+      );
       const orderCount = orders.length;
       const customerCount = customers.length;
 
-      // Compute simple growth rate (last 30 days orders vs previous 30 days)
       const now = new Date();
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(now.getDate() - 30);
@@ -149,14 +124,20 @@ export class IntegrationService {
         return date >= sixtyDaysAgo && date < thirtyDaysAgo;
       });
 
-      const recentRevenue = recentOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || '0'), 0);
-      const priorRevenue = priorOrders.reduce((sum: number, o: any) => sum + parseFloat(o.total_price || '0'), 0);
+      const recentRevenue = recentOrders.reduce(
+        (sum: number, o: any) => sum + parseFloat(o.total_price || '0'),
+        0,
+      );
+      const priorRevenue = priorOrders.reduce(
+        (sum: number, o: any) => sum + parseFloat(o.total_price || '0'),
+        0,
+      );
 
       let growthRate = 0;
       if (priorRevenue > 0) {
         growthRate = parseFloat((((recentRevenue - priorRevenue) / priorRevenue) * 100).toFixed(2));
       } else if (recentRevenue > 0) {
-        growthRate = 100; // 100% growth if there is new revenue and prior was 0
+        growthRate = 100;
       }
 
       return {
@@ -165,7 +146,6 @@ export class IntegrationService {
         orderCount,
         customerCount,
         growthRate,
-        isMockData: false,
       };
     } catch (err) {
       this.logger.error(`Shopify API Call Error: ${(err as any).message}`);

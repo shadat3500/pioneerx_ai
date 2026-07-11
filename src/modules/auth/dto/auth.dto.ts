@@ -55,3 +55,9 @@ export class VerifyEmailDto {
   @IsNotEmpty()
   otp!: string;
 }
+
+export class RequestMagicLinkDto {
+  @IsEmail()
+  @IsNotEmpty()
+  email!: string;
+}
