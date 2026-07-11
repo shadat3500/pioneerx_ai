@@ -75,7 +75,7 @@ export class AiProviderService {
       });
 
       return {
-        json: JSON.parse(response.choices[0].message.content || '{}'),
+        json: this.parseJsonResponse(response.choices[0].message.content || '{}'),
         inputTokens: response.usage?.prompt_tokens ?? 0,
         outputTokens: response.usage?.completion_tokens ?? 0,
       };
@@ -92,7 +92,7 @@ export class AiProviderService {
       const usage = result.response.usageMetadata;
 
       return {
-        json: JSON.parse(result.response.text()),
+        json: this.parseJsonResponse(result.response.text()),
         inputTokens: usage?.promptTokenCount ?? 0,
         outputTokens: usage?.candidatesTokenCount ?? 0,
       };
@@ -108,10 +108,10 @@ export class AiProviderService {
       });
 
       const textBlock = response.content.find((block) => block.type === 'text');
-      const json = textBlock && 'text' in textBlock ? JSON.parse(textBlock.text) : {};
+      const rawText = textBlock && 'text' in textBlock ? textBlock.text : '{}';
 
       return {
-        json,
+        json: this.parseJsonResponse(rawText),
         inputTokens: response.usage.input_tokens,
         outputTokens: response.usage.output_tokens,
       };
@@ -130,13 +130,37 @@ export class AiProviderService {
       });
 
       return {
-        json: JSON.parse(response.choices[0].message.content || '{}'),
+        json: this.parseJsonResponse(response.choices[0].message.content || '{}'),
         inputTokens: response.usage?.prompt_tokens ?? 0,
         outputTokens: response.usage?.completion_tokens ?? 0,
       };
     }
 
     throw new Error(`Unsupported AI provider: ${provider}`);
+  }
+
+  /** Strip markdown fences / leading prose so model output is parseable JSON. */
+  private parseJsonResponse(raw: string): Record<string, unknown> {
+    let text = (raw || '').trim();
+    if (!text) {
+      return {};
+    }
+
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced?.[1]) {
+      text = fenced[1].trim();
+    }
+
+    try {
+      return JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      const start = text.indexOf('{');
+      const end = text.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>;
+      }
+      throw new SyntaxError(`Model returned non-JSON content: ${text.slice(0, 120)}`);
+    }
   }
 
   private requireApiKey(envKey: string, providerLabel: string): string {

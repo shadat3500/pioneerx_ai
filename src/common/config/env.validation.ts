@@ -25,10 +25,6 @@ export const validationSchema = Joi.object({
   // RevenueCat
   REVENUECAT_SECRET_KEY: Joi.string().allow('').optional(),
 
-  // Shopify App integration
-  SHOPIFY_API_KEY: Joi.string().allow('').optional(),
-  SHOPIFY_API_SECRET: Joi.string().allow('').optional(),
-
   // AI Provider Keys
   OPENAI_API_KEY: Joi.string().allow('').optional(),
   GOOGLE_AI_API_KEY: Joi.string().allow('').optional(),

@@ -1,4 +1,8 @@
-export const ADVISORY_RESPONSE_SCHEMA = `{
+export const CHAT_REPLY_SCHEMA = `{
+  "reply": "Your helpful conversational response as plain text"
+}`;
+
+export const GENERATE_FROM_CHAT_SCHEMA = `{
   "action_steps": [
     { "text": "Task Title", "description": "Short explanation of the step" }
   ],

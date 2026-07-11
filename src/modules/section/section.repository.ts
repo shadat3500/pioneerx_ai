@@ -13,7 +13,6 @@ export class SectionRepository extends BaseRepository<Section> {
     return this.prisma.section.findMany({
       where: { isActive: true },
       include: {
-        toolCatalog: { where: { isActive: true } },
         suggestedLinks: true,
       },
     });
@@ -23,7 +22,6 @@ export class SectionRepository extends BaseRepository<Section> {
     return this.prisma.section.findUnique({
       where: { key },
       include: {
-        toolCatalog: { where: { isActive: true } },
         suggestedLinks: true,
       },
     });

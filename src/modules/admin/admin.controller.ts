@@ -73,42 +73,6 @@ export class AdminController {
   @ApiBearerAuth()
   @UseGuards(AdminAuthGuard)
   @Public()
-  @Get('tool-catalog')
-  @ApiOperation({ summary: 'Get all tool catalog items' })
-  getToolCatalogItems() {
-    return this.adminService.getToolCatalogItems();
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Post('tool-catalog')
-  @ApiOperation({ summary: 'Create a new tool catalog item' })
-  createToolCatalogItem(@Body() body: any) {
-    return this.adminService.createToolCatalogItem(body);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Patch('tool-catalog/:id')
-  @ApiOperation({ summary: 'Update a tool catalog item' })
-  updateToolCatalogItem(@Param('id') id: string, @Body() body: any) {
-    return this.adminService.updateToolCatalogItem(id, body);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Delete('tool-catalog/:id')
-  @ApiOperation({ summary: 'Delete a tool catalog item' })
-  deleteToolCatalogItem(@Param('id') id: string) {
-    return this.adminService.deleteToolCatalogItem(id);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
   @Get('prompt-templates')
   @ApiOperation({ summary: 'Get all prompt templates' })
   getPromptTemplates() {
@@ -203,41 +167,5 @@ export class AdminController {
   @ApiOperation({ summary: 'List users with subscription tier and trial status' })
   getUsers(@Query() pagination: PaginationDto) {
     return this.adminService.getUsers(pagination);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Get('ai-tips')
-  @ApiOperation({ summary: 'Get all AI tips' })
-  getAiTips() {
-    return this.adminService.getAiTips();
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Post('ai-tips')
-  @ApiOperation({ summary: 'Create a new AI tip' })
-  createAiTip(@Body() body: any) {
-    return this.adminService.createAiTip(body);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Patch('ai-tips/:id')
-  @ApiOperation({ summary: 'Update an AI tip' })
-  updateAiTip(@Param('id') id: string, @Body() body: any) {
-    return this.adminService.updateAiTip(id, body);
-  }
-
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Delete('ai-tips/:id')
-  @ApiOperation({ summary: 'Delete an AI tip' })
-  deleteAiTip(@Param('id') id: string) {
-    return this.adminService.deleteAiTip(id);
   }
 }

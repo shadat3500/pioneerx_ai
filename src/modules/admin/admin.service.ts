@@ -69,23 +69,6 @@ export class AdminService {
     return updated;
   }
 
-  // ToolCatalogItem CRUD
-  async getToolCatalogItems() {
-    return this.repository.findAllToolCatalogItems();
-  }
-
-  async createToolCatalogItem(data: any) {
-    return this.repository.createToolCatalogItem(data);
-  }
-
-  async updateToolCatalogItem(id: string, data: any) {
-    return this.repository.updateToolCatalogItem(id, data);
-  }
-
-  async deleteToolCatalogItem(id: string) {
-    return this.repository.deleteToolCatalogItem(id);
-  }
-
   // PromptTemplate CRUD
   async getPromptTemplates() {
     return this.repository.findAllPromptTemplates();
@@ -264,22 +247,5 @@ export class AdminService {
         totalPages: Math.ceil(total / limit),
       },
     };
-  }
-
-  // AiTip CRUD
-  async getAiTips() {
-    return this.repository.findAllAiTips();
-  }
-
-  async createAiTip(data: any) {
-    return this.repository.createAiTip(data);
-  }
-
-  async updateAiTip(id: string, data: any) {
-    return this.repository.updateAiTip(id, data);
-  }
-
-  async deleteAiTip(id: string) {
-    return this.repository.deleteAiTip(id);
   }
 }

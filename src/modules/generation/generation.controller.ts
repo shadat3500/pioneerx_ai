@@ -1,27 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GenerationService } from './generation.service';
-import { GenerateDto, SaveOutputDto } from './dto/generate.dto';
+import { SaveOutputDto } from './dto/generate.dto';
 import { GetCurrentUser } from '../auth/decorators/get-current-user.decorator';
-import { SectionAccessGuard } from './guards/section-access.guard';
 
 @ApiTags('Generation')
 @ApiBearerAuth()
 @Controller()
 export class GenerationController {
   constructor(private readonly generationService: GenerationService) {}
-
-  @Post('sections/:key/generate')
-  @UseGuards(SectionAccessGuard)
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate advisory advice for a specific section using MoA' })
-  generate(
-    @GetCurrentUser('sub') userId: string,
-    @Param('key') sectionKey: string,
-    @Body() dto: GenerateDto,
-  ) {
-    return this.generationService.generate(userId, sectionKey, dto.prompt);
-  }
 
   @Get('generations/:id')
   @HttpCode(HttpStatus.OK)

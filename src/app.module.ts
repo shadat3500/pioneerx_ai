@@ -21,8 +21,8 @@ import { GenerationModule } from './modules/generation/generation.module';
 import { SectionModule } from './modules/section/section.module';
 import { DailyTaskModule } from './modules/daily-task/daily-task.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
-import { IntegrationModule } from './modules/integration/integration.module';
 import { TokenModule } from './modules/token/token.module';
+import { ConversationModule } from './modules/conversation/conversation.module';
 import { BullModule } from '@nestjs/bullmq';
 
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -59,7 +59,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     SectionModule,
     DailyTaskModule,
     SubscriptionModule,
-    IntegrationModule,
+    ConversationModule,
     TokenModule,
   ],
 

@@ -35,11 +35,6 @@ enum TaskPriority {
   LOW
 }
 
-enum IntegrationProvider {
-  SHOPIFY
-  GOOGLE_ANALYTICS
-}
-
 enum ModelRole {
   PROPOSER_1
   PROPOSER_2
@@ -66,7 +61,7 @@ model User {
   updatedAt       DateTime  @updatedAt
 
   businessProfiles BusinessProfile[]
-  integrations     Integration[]
+  conversations    Conversation[]
   generations      Generation[]
   savedOutputs     SavedOutput[]
   dailyTasks       DailyTask[]
@@ -87,9 +82,10 @@ model BusinessProfile {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  generations  Generation[]
-  savedOutputs SavedOutput[]
-  dailyTasks   DailyTask[]
+  conversations Conversation[]
+  generations   Generation[]
+  savedOutputs  SavedOutput[]
+  dailyTasks    DailyTask[]
 
   @@index([userId])
   @@map("business_profiles")
@@ -164,9 +160,9 @@ model Section {
   isActive        Boolean          @default(true)
 
   promptTemplates PromptTemplate[]
-  toolCatalog     ToolCatalogItem[]
   suggestedLinks  SuggestedLink[]
   generations     Generation[]
+  conversations   Conversation[]
 
   @@map("sections")
 }
@@ -199,6 +195,40 @@ model AiModelConfig {
 }
 
 // ─────────────────────────────────────────────
+// Conversation (section-scoped chatbot)
+// ─────────────────────────────────────────────
+
+model Conversation {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  sectionId         String
+  section           Section         @relation(fields: [sectionId], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  messages    Message[]
+  generations Generation[]
+
+  @@unique([userId, businessProfileId, sectionId])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String       // "user" | "assistant"
+  content        String       @db.Text
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+// ─────────────────────────────────────────────
 // Generation Pipeline
 // ─────────────────────────────────────────────
 
@@ -210,9 +240,11 @@ model Generation {
   businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
   sectionId         String
   section           Section         @relation(fields: [sectionId], references: [id])
+  conversationId    String?
+  conversation      Conversation?   @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   userPrompt        String          @db.Text
   proposerResponses Json            // [{ role, modelId, raw, latencyMs }]
-  aggregatedResult  Json            // { action_steps, tools_features, ai_suggested_tools, suggested_links, ai_tip }
+  aggregatedResult  Json            // { action_steps, suggested_links }
   isSaved           Boolean         @default(false)
   createdAt         DateTime        @default(now())
 
@@ -252,21 +284,8 @@ model SavedOutput {
 }
 
 // ─────────────────────────────────────────────
-// Tool Catalog & Suggested Links
+// Suggested Links
 // ─────────────────────────────────────────────
-
-model ToolCatalogItem {
-  id          String  @id @default(uuid())
-  sectionId   String
-  section     Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  name        String
-  description String
-  linkType    String  // "internal" | "external"
-  url         String
-  isActive    Boolean @default(true)
-
-  @@map("tool_catalog_items")
-}
 
 model SuggestedLink {
   id               String  @id @default(uuid())
@@ -277,19 +296,6 @@ model SuggestedLink {
   externalUrl      String?
 
   @@map("suggested_links")
-}
-
-// ─────────────────────────────────────────────
-// AI Tips
-// ─────────────────────────────────────────────
-
-model AiTip {
-  id       String  @id @default(uuid())
-  text     String
-  category String?
-  isActive Boolean @default(true)
-
-  @@map("ai_tips")
 }
 
 // ─────────────────────────────────────────────
@@ -310,23 +316,6 @@ model DailyTask {
   @@unique([businessProfileId, date])
   @@index([userId])
   @@map("daily_tasks")
-}
-
-// ─────────────────────────────────────────────
-// Third-party Integrations
-// ─────────────────────────────────────────────
-
-model Integration {
-  id           String              @id @default(uuid())
-  userId       String
-  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider     IntegrationProvider
-  accessToken  String              // AES-256 encrypted at rest
-  refreshToken String?
-  status       String              @default("connected")
-  connectedAt  DateTime            @default(now())
-
-  @@map("integrations")
 }
 
 // ─────────────────────────────────────────────

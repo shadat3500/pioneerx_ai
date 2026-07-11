@@ -1,0 +1,1188 @@
+{
+  "info": {
+    "_postman_id": "d69bfbcc-f131-5ba0-c911-0cab137e3e07",
+    "name": "PioneerX AI API v1.4",
+    "description": "PioneerX AI API Collection — Backend v1.4.\n\nChanges from v1.3:\n- Section-scoped chatbot (Conversations)\n- Generate action steps + suggested links from conversation\n- Removed POST /sections/:key/generate\n- Removed Shopify integrations\n- Removed Tools & Features / AI Tips (admin + output)\n- Free tier max 3 business profiles",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "🔗 Magic Link — Request",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"pogici5531@epaynine.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/magic-link",
+              "host": ["{{url}}"],
+              "path": ["auth", "magic-link"]
+            },
+            "description": "Sends a magic link login email. If user does not exist, creates account with 3-day trial. Always returns { message: 'Check your email' }."
+          },
+          "response": []
+        },
+        {
+          "name": "🔗 Magic Link — Verify Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.access_token) {",
+                  "    pm.environment.set(\"access_token\", jsonData.data.access_token);",
+                  "    pm.environment.set(\"refresh_token\", jsonData.data.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/verify?token={{magic_link_token}}",
+              "host": ["{{url}}"],
+              "path": ["auth", "verify"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{magic_link_token}}",
+                  "description": "The token received in the magic link email"
+                }
+              ]
+            },
+            "description": "Verifies magic link token and issues JWT access + refresh tokens. Token expires in 15 minutes and is single-use."
+          },
+          "response": []
+        },
+        {
+          "name": "Google OAuth — Initiate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/google",
+              "host": ["{{url}}"],
+              "path": ["auth", "google"]
+            },
+            "description": "Redirects the user to Google OAuth consent screen. Open this in a browser, not Postman."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Business Profile",
+      "item": [
+        {
+          "name": "Get Profile Context",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/profile",
+              "host": ["{{url}}"],
+              "path": ["profile"]
+            },
+            "description": "Returns { activeProfile, profiles[] } for the current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Active Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"businessName\": \"PioneerX Startups\",\n    \"industry\": \"Technology\",\n    \"currentPhase\": \"LAUNCH\",\n    \"country\": \"USA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/profile",
+              "host": ["{{url}}"],
+              "path": ["profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Business Profile",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"businessName\": \"Second Venture\",\n    \"industry\": \"E-commerce\",\n    \"currentPhase\": \"IDEA\",\n    \"country\": \"USA\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/business-profiles",
+              "host": ["{{url}}"],
+              "path": ["business-profiles"]
+            },
+            "description": "Create a new business profile.\n\nv1.4: Free tier allows max 3 profiles (403 if exceeded). PRO / PRO_PLUS / ELITE = unlimited."
+          },
+          "response": []
+        },
+        {
+          "name": "List Business Profiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/business-profiles",
+              "host": ["{{url}}"],
+              "path": ["business-profiles"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Business Profile by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/business-profiles/:id",
+              "host": ["{{url}}"],
+              "path": ["business-profiles", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "profile-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Business Profile by ID",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"businessName\": \"Updated Name\",\n    \"industry\": \"SaaS\",\n    \"currentPhase\": \"GROWTH\",\n    \"country\": \"BD\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/business-profiles/:id",
+              "host": ["{{url}}"],
+              "path": ["business-profiles", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "profile-uuid"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Business Profile",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/business-profiles/:id/activate",
+              "host": ["{{url}}"],
+              "path": ["business-profiles", ":id", "activate"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "profile-uuid"
+                }
+              ]
+            },
+            "description": "Sets this profile as active. Conversations / generate / daily tasks use the active profile."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Business Profile",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/business-profiles/:id",
+              "host": ["{{url}}"],
+              "path": ["business-profiles", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "profile-uuid"
+                }
+              ]
+            },
+            "description": "Cannot delete your only remaining profile."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sections",
+      "item": [
+        {
+          "name": "List Sections",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/sections",
+              "host": ["{{url}}"],
+              "path": ["sections"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Section Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/sections/{{section_key}}",
+              "host": ["{{url}}"],
+              "path": ["sections", "{{section_key}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Conversations",
+      "description": "v1.4 section-scoped chatbot. Replaces the old single-prompt generate flow.",
+      "item": [
+        {
+          "name": "Get or Create Conversation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/conversations/{{section_key}}",
+              "host": ["{{url}}"],
+              "path": ["conversations", "{{section_key}}"]
+            },
+            "description": "Finds conversation for { userId, activeProfileId, section }. Creates one if missing.\nReturns conversation + all messages ordered by createdAt ASC."
+          },
+          "response": []
+        },
+        {
+          "name": "Send Message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.message) {",
+                  "    console.log('Assistant:', jsonData.data.message.content);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"content\": \"How should I structure my marketing budget for the first 3 months?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/conversations/{{section_key}}/message",
+              "host": ["{{url}}"],
+              "path": ["conversations", "{{section_key}}", "message"]
+            },
+            "description": "Saves user message, calls AI with last 10 messages as context, saves assistant reply.\n\nBody: { content: string }\n\nReturns: { message, tokenStatus }"
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Action Steps + Links",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.generationId) {",
+                  "    pm.collectionVariables.set(\"generation_id\", jsonData.data.generationId);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/conversations/{{section_key}}/generate",
+              "host": ["{{url}}"],
+              "path": ["conversations", "{{section_key}}", "generate"]
+            },
+            "description": "Triggered by the Generate button. Uses last 10 conversation messages.\nNo body required.\n\nReturns: { generationId, action_steps[4], suggested_links[4], tokenStatus }\n\nAuto-saves generation_id to collection variable for Save Output."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Generation (Saved Outputs)",
+      "description": "Save / unsave / list generation results. Old POST /sections/:key/generate removed in v1.4.",
+      "item": [
+        {
+          "name": "Get Generation Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/generations/:id",
+              "host": ["{{url}}"],
+              "path": ["generations", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{generation_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Save Output",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"label\": \"Marketing Strategy Q3\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/generations/:id/save",
+              "host": ["{{url}}"],
+              "path": ["generations", ":id", "save"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{generation_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Unsave Output",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/generations/:id/save",
+              "host": ["{{url}}"],
+              "path": ["generations", ":id", "save"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{generation_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Saved Outputs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/saved-outputs",
+              "host": ["{{url}}"],
+              "path": ["saved-outputs"]
+            },
+            "description": "Filtered by current user + active business profile."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Daily Tasks",
+      "item": [
+        {
+          "name": "Get Today's Tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/daily-tasks/today",
+              "host": ["{{url}}"],
+              "path": ["daily-tasks", "today"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Toggle Task Status",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/daily-tasks/:id/toggle/:taskId",
+              "host": ["{{url}}"],
+              "path": ["daily-tasks", ":id", "toggle", ":taskId"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "daily-task-record-id"
+                },
+                {
+                  "key": "taskId",
+                  "value": "dt-1"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Regenerate Today's Tasks",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/daily-tasks/regenerate",
+              "host": ["{{url}}"],
+              "path": ["daily-tasks", "regenerate"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Token Status",
+      "item": [
+        {
+          "name": "Get Token Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/token-status",
+              "host": ["{{url}}"],
+              "path": ["token-status"]
+            },
+            "description": "Daily token usage / quota for current user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subscription",
+      "item": [
+        {
+          "name": "Get My Subscription",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/subscription/me",
+              "host": ["{{url}}"],
+              "path": ["subscription", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "RevenueCat Webhook (Simulate)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{revenuecat_secret}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"event\": {\n        \"type\": \"INITIAL_PURCHASE\",\n        \"app_user_id\": \"user-uuid-here\",\n        \"product_id\": \"pioneerx_pro_monthly\",\n        \"entitlement_id\": \"pro_features\",\n        \"expiration_at_ms\": 1720000000000\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/webhooks/revenuecat",
+              "host": ["{{url}}"],
+              "path": ["webhooks", "revenuecat"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.access_token) {",
+                  "    pm.environment.set(\"admin_token\", jsonData.data.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@pioneerx.ai\",\n    \"password\": \"adminpassword123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/admin/auth/login",
+              "host": ["{{url}}"],
+              "path": ["admin", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Sections",
+          "item": [
+            {
+              "name": "List Sections",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/sections",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "sections"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Section",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"requiredTier\": \"PRO\",\n    \"isActive\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/sections/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "sections", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "section-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "AI Model Configs",
+          "item": [
+            {
+              "name": "List AI Configs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/ai-configs",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "ai-configs"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update AI Config",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"provider\": \"openai\",\n    \"modelId\": \"gpt-4o\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/ai-configs/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "ai-configs", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "config-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Prompt Templates",
+          "item": [
+            {
+              "name": "List Templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/prompt-templates",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "prompt-templates"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Template",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"sectionId\": \"section-uuid\",\n    \"systemPrompt\": \"You are an expert advisor...\",\n    \"version\": 1,\n    \"isActive\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/prompt-templates",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "prompt-templates"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Template",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"systemPrompt\": \"Updated system prompt...\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/prompt-templates/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "prompt-templates", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "template-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Quota Configs",
+          "item": [
+            {
+              "name": "List Quotas",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/quota-configs",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "quota-configs"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Quota",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"dailyTokenLimit\": 50000,\n    \"dailyRegenerateLimit\": 5\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/quota-configs/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "quota-configs", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "quota-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Model Pricings",
+          "item": [
+            {
+              "name": "List Model Pricings",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/model-pricings",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "model-pricings"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create Model Pricing",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"provider\": \"openai\",\n    \"modelId\": \"gpt-4o\",\n    \"inputPricePerMToken\": 2.5,\n    \"outputPricePerMToken\": 10\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/model-pricings",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "model-pricings"]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update Model Pricing",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"inputPricePerMToken\": 2.5,\n    \"outputPricePerMToken\": 10\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/model-pricings/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "model-pricings", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "pricing-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Model Pricing",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/model-pricings/:id",
+                  "host": ["{{url}}"],
+                  "path": ["admin", "model-pricings", ":id"],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "pricing-id"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Token Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/admin/token-dashboard",
+              "host": ["{{url}}"],
+              "path": ["admin", "token-dashboard"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/admin/users?page=1&limit=20",
+              "host": ["{{url}}"],
+              "path": ["admin", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{admin_token}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Extra",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\",\n    \"name\": \"John Doe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/register",
+              "host": ["{{url}}"],
+              "path": ["auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.access_token) {",
+                  "    pm.environment.set(\"access_token\", jsonData.data.access_token);",
+                  "    pm.environment.set(\"refresh_token\", jsonData.data.refresh_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/login",
+              "host": ["{{url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{refresh_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/auth/refresh",
+              "host": ["{{url}}"],
+              "path": ["auth", "refresh"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/logout",
+              "host": ["{{url}}"],
+              "path": ["auth", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/forgot-password",
+              "host": ["{{url}}"],
+              "path": ["auth", "forgot-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"otp\": \"123456\",\n    \"newPassword\": \"newpassword123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/reset-password",
+              "host": ["{{url}}"],
+              "path": ["auth", "reset-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"otp\": \"123456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/verify-email",
+              "host": ["{{url}}"],
+              "path": ["auth", "verify-email"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/resend-verification",
+              "host": ["{{url}}"],
+              "path": ["auth", "resend-verification"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "url",
+      "value": "http://localhost:8083/api/v1"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "refresh_token",
+      "value": ""
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "revenuecat_secret",
+      "value": "your-rc-secret"
+    },
+    {
+      "key": "section_key",
+      "value": "marketing"
+    },
+    {
+      "key": "generation_id",
+      "value": ""
+    },
+    {
+      "key": "magic_link_token",
+      "value": ""
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BaseRepository } from '../../common/repositories/base.repository';
-import { BusinessProfile, BusinessPhase } from '@prisma/client';
+import { BusinessProfile, BusinessPhase, SubscriptionTier } from '@prisma/client';
 
 @Injectable()
 export class BusinessProfileRepository extends BaseRepository<BusinessProfile> {
@@ -33,6 +33,14 @@ export class BusinessProfileRepository extends BaseRepository<BusinessProfile> {
     return this.prisma.businessProfile.count({
       where: { userId },
     });
+  }
+
+  async getUserSubscriptionTier(userId: string): Promise<SubscriptionTier> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { userId },
+      select: { tier: true },
+    });
+    return subscription?.tier ?? SubscriptionTier.FREE;
   }
 
   async findActiveProfile(userId: string) {

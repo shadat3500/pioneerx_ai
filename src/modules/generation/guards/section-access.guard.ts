@@ -11,7 +11,7 @@ export class SectionAccessGuard implements CanActivate {
     const user = request.user;
     if (!user) return false;
 
-    const sectionKey = request.params.key;
+    const sectionKey = request.params.key || request.params.sectionKey;
     if (!sectionKey) return true;
 
     const section = await this.prisma.section.findUnique({

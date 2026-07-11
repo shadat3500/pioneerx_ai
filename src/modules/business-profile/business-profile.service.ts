@@ -1,12 +1,14 @@
 import {
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { BusinessProfileRepository } from './business-profile.repository';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateProfileDto } from './dto/create-profile.dto';
-import { BusinessProfile } from '@prisma/client';
+import { BusinessProfile, SubscriptionTier } from '@prisma/client';
 
 @Injectable()
 export class BusinessProfileService {
@@ -34,10 +36,20 @@ export class BusinessProfileService {
   }
 
   async createProfile(userId: string, dto: CreateProfileDto) {
-    const count = await this.repository.countByUserId(userId);
+    const profileCount = await this.repository.countByUserId(userId);
+    const tier = await this.repository.getUserSubscriptionTier(userId);
+    const limit = tier === SubscriptionTier.FREE ? 3 : null;
+
+    if (limit !== null && profileCount >= limit) {
+      throw new HttpException(
+        'Free tier allows a maximum of 3 business profiles. Upgrade to create more.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const profile = await this.repository.createProfile(userId, dto);
 
-    if (count === 0) {
+    if (profileCount === 0) {
       await this.repository.setActiveProfile(userId, profile.id);
     }
 

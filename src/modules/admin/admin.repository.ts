@@ -18,7 +18,7 @@ export class AdminRepository extends BaseRepository<AdminUser> {
   // Section CRUD
   async findAllSections() {
     return this.prisma.section.findMany({
-      include: { promptTemplates: true, toolCatalog: true, suggestedLinks: true },
+      include: { promptTemplates: true, suggestedLinks: true },
     });
   }
 
@@ -38,28 +38,6 @@ export class AdminRepository extends BaseRepository<AdminUser> {
     return this.prisma.aiModelConfig.update({
       where: { id },
       data,
-    });
-  }
-
-  // ToolCatalogItem CRUD
-  async findAllToolCatalogItems() {
-    return this.prisma.toolCatalogItem.findMany();
-  }
-
-  async createToolCatalogItem(data: any) {
-    return this.prisma.toolCatalogItem.create({ data });
-  }
-
-  async updateToolCatalogItem(id: string, data: any) {
-    return this.prisma.toolCatalogItem.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteToolCatalogItem(id: string) {
-    return this.prisma.toolCatalogItem.delete({
-      where: { id },
     });
   }
 
@@ -99,28 +77,6 @@ export class AdminRepository extends BaseRepository<AdminUser> {
     return this.prisma.quotaConfig.update({
       where: { id },
       data,
-    });
-  }
-
-  // AiTip CRUD
-  async findAllAiTips() {
-    return this.prisma.aiTip.findMany();
-  }
-
-  async createAiTip(data: any) {
-    return this.prisma.aiTip.create({ data });
-  }
-
-  async updateAiTip(id: string, data: any) {
-    return this.prisma.aiTip.update({
-      where: { id },
-      data,
-    });
-  }
-
-  async deleteAiTip(id: string) {
-    return this.prisma.aiTip.delete({
-      where: { id },
     });
   }
 
