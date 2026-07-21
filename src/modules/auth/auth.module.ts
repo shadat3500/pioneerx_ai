@@ -8,6 +8,8 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { AppleStrategy } from './strategies/apple.strategy';
 import { UsersModule } from '../users/users.module';
 import { BusinessProfileModule } from '../business-profile/business-profile.module';
+import { CreditModule } from '../credit/credit.module';
+import { PromoModule } from '../promo/promo.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 
@@ -48,6 +50,8 @@ function oauthProviders() {
     }),
     UsersModule,
     BusinessProfileModule,
+    CreditModule,
+    PromoModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AtStrategy, RtStrategy, ...oauthProviders()],

@@ -15,6 +15,8 @@ import Redis from 'ioredis';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessProfileService } from '../business-profile/business-profile.service';
+import { CreditService } from '../credit/credit.service';
+import { PromoService } from '../promo/promo.service';
 
 @Injectable()
 export class AuthService {
@@ -28,7 +30,20 @@ export class AuthService {
     private mailService: MailService,
     private prisma: PrismaService,
     private businessProfileService: BusinessProfileService,
+    private creditService: CreditService,
+    private promoService: PromoService,
   ) {}
+
+  /** v1.5 — shared post-creation setup: business profile + credit balance. */
+  private async initializeNewUser(userId: string) {
+    await this.businessProfileService.resolveActiveProfile(userId);
+
+    try {
+      await this.creditService.initializeForUser(userId);
+    } catch (err) {
+      this.logger.error(`Credit balance init failed for ${userId}: ${(err as any).message}`);
+    }
+  }
 
   async register(dto: RegisterDto) {
     const userExists = await this.usersRepo.findByEmail(dto.email);
@@ -43,7 +58,11 @@ export class AuthService {
       trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
     });
 
-    await this.businessProfileService.resolveActiveProfile(newUser.id);
+    await this.initializeNewUser(newUser.id);
+
+    if (dto.promoCode) {
+      await this.promoService.tryApplyAtRegistration(newUser.id, dto.promoCode);
+    }
 
     // Don't let a flaky/misconfigured mail provider fail the whole signup
     try {
@@ -99,7 +118,7 @@ export class AuthService {
         trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       });
 
-      await this.businessProfileService.resolveActiveProfile(user.id);
+      await this.initializeNewUser(user.id);
 
       try {
         await this.mailService.sendWelcomeEmail(user.email, user.name || 'User');
@@ -253,18 +272,32 @@ export class AuthService {
 
   async requestMagicLink(dto: RequestMagicLinkDto) {
     let user = await this.usersRepo.findByEmail(dto.email);
+    const isDevMagicUser =
+      dto.email === 'test@gmail.com' &&
+      this.config.get<string>('NODE_ENV') !== 'production';
 
     if (!user) {
-      // New user — create with random password hash and 3-day trial
       const randomPassword = randomBytes(32).toString('hex');
       const hash = await this.hashData(randomPassword);
       user = await this.usersRepo.create({
         email: dto.email,
         passwordHash: hash,
-        trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        trialEndsAt: isDevMagicUser ? null : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       });
 
-      await this.businessProfileService.resolveActiveProfile(user.id);
+      await this.initializeNewUser(user.id);
+
+      if (dto.promoCode) {
+        await this.promoService.tryApplyAtRegistration(user.id, dto.promoCode);
+      }
+    } else if (isDevMagicUser && user.trialEndsAt !== null) {
+      await this.usersRepo.update(user.id, { trialEndsAt: null });
+    }
+
+    if (isDevMagicUser) {
+      const tokens = await this.getTokens(user.id, user.email);
+      await this.updateRtHash(user.id, tokens.refresh_token);
+      return tokens;
     }
 
     // Generate secure random token

@@ -1,37 +1,37 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, Min, ValidateIf } from 'class-validator';
 
-export class UpdateQuotaConfigDto {
+export class UpdateCreditConfigDto {
   @ApiPropertyOptional({
-    description: 'Daily token limit. Omit or send null for unlimited.',
-    example: 100000,
+    description: 'Monthly credits for paid tiers. Send null to disable.',
+    example: 15000,
     nullable: true,
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsInt()
-  @Min(1)
-  dailyTokenLimit?: number | null;
+  @Min(0)
+  monthlyCredits?: number | null;
 
   @ApiPropertyOptional({
-    description: 'Daily regenerate limit. Omit or send null for unlimited.',
-    example: 5,
+    description: 'Daily credits for the Free tier. Send null to disable.',
+    example: 500,
     nullable: true,
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsInt()
-  @Min(1)
-  dailyRegenerateLimit?: number | null;
+  @Min(0)
+  dailyCredits?: number | null;
 
   @ApiPropertyOptional({
-    description: 'Daily image generation limit. Omit or send null for unlimited.',
-    example: 3,
+    description: 'Daily credits during trial. Send null to disable.',
+    example: 2000,
     nullable: true,
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
   @IsInt()
-  @Min(1)
-  dailyImageLimit?: number | null;
+  @Min(0)
+  trialCredits?: number | null;
 }

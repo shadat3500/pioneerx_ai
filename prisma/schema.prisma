@@ -42,6 +42,7 @@ enum ModelRole {
   AGGREGATOR
   DAILY_TASK_GENERATOR
   FREE_TIER_MODEL
+  IMAGE_GENERATOR
 }
 
 // ─────────────────────────────────────────────
@@ -60,13 +61,19 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  businessProfiles BusinessProfile[]
-  conversations    Conversation[]
-  generations      Generation[]
-  savedOutputs     SavedOutput[]
-  dailyTasks       DailyTask[]
-  subscription     Subscription?
-  tokenUsage       TokenUsage[]
+  businessProfiles   BusinessProfile[]
+  conversations      Conversation[]
+  generations        Generation[]
+  savedOutputs       SavedOutput[]
+  dailyTasks         DailyTask[]
+  subscription       Subscription?
+  tokenUsage         TokenUsage[]
+  creditBalance      CreditBalance?
+  creditTransactions CreditTransaction[]
+  imageGenerations   ImageGeneration[]
+  notifications      Notification[]
+  promoRedemptions   PromoCodeRedemption[]
+  review             Review?
 
   @@map("users")
 }
@@ -82,10 +89,11 @@ model BusinessProfile {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  conversations Conversation[]
-  generations   Generation[]
-  savedOutputs  SavedOutput[]
-  dailyTasks    DailyTask[]
+  conversations    Conversation[]
+  generations      Generation[]
+  savedOutputs     SavedOutput[]
+  dailyTasks       DailyTask[]
+  imageGenerations ImageGeneration[]
 
   @@index([userId])
   @@map("business_profiles")
@@ -113,9 +121,51 @@ model QuotaConfig {
   tier                 SubscriptionTier @unique
   dailyTokenLimit      Int?             // null = unlimited
   dailyRegenerateLimit Int?             // null = unlimited (current default for all tiers)
+  dailyImageLimit      Int?             // null = unlimited
   updatedAt            DateTime         @updatedAt
 
   @@map("quota_configs")
+}
+
+// ─────────────────────────────────────────────
+// Credits
+// ─────────────────────────────────────────────
+
+model CreditBalance {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Int      @default(0)
+  lifetimeUsed Int      @default(0)
+  lastResetAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("credit_balances")
+}
+
+model CreditTransaction {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Int // positive = credit added, negative = credit deducted
+  type         String // "deduct" | "refund" | "topup" | "reset"
+  description  String? // e.g. "message generation", "image generation", "billing reset"
+  generationId String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
+}
+
+model CreditConfig {
+  id             String           @id @default(uuid())
+  tier           SubscriptionTier @unique
+  monthlyCredits Int? // null = daily reset applies instead
+  dailyCredits   Int? // used for Free and Trial
+  trialCredits   Int? // daily credits during trial period
+  updatedAt      DateTime         @updatedAt
+
+  @@map("credit_configs")
 }
 
 model TokenUsage {
@@ -303,19 +353,107 @@ model SuggestedLink {
 // ─────────────────────────────────────────────
 
 model DailyTask {
+  id                   String          @id @default(uuid())
+  userId               String
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId    String
+  businessProfile      BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  date                 DateTime        // date-only; one record per profile per day
+  tasks                Json            // [{ id, text, priority, isDone }]
+  regenerateCount      Int             @default(0)
+  imageGenerationCount Int             @default(0)
+  createdAt            DateTime        @default(now())
+
+  @@unique([businessProfileId, date])
+  @@index([userId])
+  @@map("daily_tasks")
+}
+
+// ─────────────────────────────────────────────
+// Image Generation
+// ─────────────────────────────────────────────
+
+model ImageGeneration {
   id                String          @id @default(uuid())
   userId            String
   user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessProfileId String
   businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
-  date              DateTime        // date-only; one record per profile per day
-  tasks             Json            // [{ id, text, priority, isDone }]
-  regenerateCount   Int             @default(0)
+  prompt            String          @db.Text
+  imageUrl          String
+  creditsDeducted   Int             @default(40)
   createdAt         DateTime        @default(now())
 
-  @@unique([businessProfileId, date])
-  @@index([userId])
-  @@map("daily_tasks")
+  @@index([userId, createdAt])
+  @@map("image_generations")
+}
+
+// ─────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String // "credit_low" | "model_update" | "platform_update"
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ─────────────────────────────────────────────
+// Promo Codes
+// ─────────────────────────────────────────────
+
+model PromoCode {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  trialDays Int // how many days of trial this code gives
+  maxUses   Int? // null = unlimited
+  usedCount Int       @default(0)
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  redemptions PromoCodeRedemption[]
+
+  @@map("promo_codes")
+}
+
+model PromoCodeRedemption {
+  id          String    @id @default(uuid())
+  promoCodeId String
+  promoCode   PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  redeemedAt  DateTime  @default(now())
+
+  @@unique([promoCodeId, userId]) // one redemption per user per code
+  @@map("promo_code_redemptions")
+}
+
+// ─────────────────────────────────────────────
+// Reviews
+// ─────────────────────────────────────────────
+
+model Review {
+  id          String   @id @default(uuid())
+  userId      String?  @unique // one review per user; null for admin-created testimonials
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name        String
+  roleCompany String?
+  reviewText  String   @db.Text
+  rating      Int? // 1-5 stars, optional
+  avatarUrl   String?
+  isApproved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([isApproved, createdAt])
+  @@map("reviews")
 }
 
 // ─────────────────────────────────────────────

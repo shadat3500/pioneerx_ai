@@ -44,8 +44,18 @@ export class GenerationService {
     return this.repository.deleteSavedOutput(generationId);
   }
 
-  async getSavedOutputs(userId: string) {
+  async getSavedOutputs(userId: string, sectionKey?: string) {
     const activeProfile = await this.businessProfileService.resolveActiveProfile(userId);
-    return this.repository.getSavedOutputs(userId, activeProfile.id);
+
+    let sectionId: string | undefined;
+    if (sectionKey) {
+      const section = await this.repository.findSectionByKey(sectionKey);
+      if (!section) {
+        throw new NotFoundException(`Section not found: ${sectionKey}`);
+      }
+      sectionId = section.id;
+    }
+
+    return this.repository.getSavedOutputs(userId, activeProfile.id, sectionId);
   }
 }

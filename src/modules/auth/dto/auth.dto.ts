@@ -13,6 +13,10 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   name?: string;
+
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }
 
 export class LoginDto {
@@ -60,4 +64,8 @@ export class RequestMagicLinkDto {
   @IsEmail()
   @IsNotEmpty()
   email!: string;
+
+  @IsString()
+  @IsOptional()
+  promoCode?: string;
 }

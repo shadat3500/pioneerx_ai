@@ -6,10 +6,13 @@ import { AdminRepository } from './admin.repository';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateModelPricingDto, UpdateModelPricingDto } from './dto/model-pricing.dto';
 import { UpdateQuotaConfigDto } from './dto/quota-config.dto';
+import { UpdateCreditConfigDto } from './dto/credit-config.dto';
+import { BroadcastNotificationDto } from './dto/broadcast-notification.dto';
 import { TokenDashboardQueryDto } from './dto/token-dashboard-query.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { AiProviderService } from '../ai-provider/ai-provider.service';
 import { TokenService } from '../token/token.service';
+import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
 export class AdminService {
@@ -19,6 +22,7 @@ export class AdminService {
     private readonly config: ConfigService,
     private readonly aiProvider: AiProviderService,
     private readonly tokenService: TokenService,
+    private readonly notificationService: NotificationService,
   ) { }
 
   async login(dto: AdminLoginDto) {
@@ -100,6 +104,20 @@ export class AdminService {
     const updated = await this.repository.updateQuotaConfig(id, data);
     await this.tokenService.invalidateQuotaCache(updated.tier);
     return updated;
+  }
+
+  // CreditConfig CRUD (v1.5 §10a)
+  async getCreditConfigs() {
+    return this.repository.findAllCreditConfigs();
+  }
+
+  async updateCreditConfig(id: string, dto: UpdateCreditConfigDto) {
+    return this.repository.updateCreditConfig(id, dto);
+  }
+
+  // Broadcast notification (v1.5 §10b)
+  async broadcastNotification(dto: BroadcastNotificationDto) {
+    return this.notificationService.broadcast(dto.type, dto.message);
   }
 
   // ModelPricing CRUD

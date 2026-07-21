@@ -36,20 +36,47 @@ async function main() {
     console.log('ℹ️ Admin user already exists. Skipping...');
   }
 
-  // 2. Seed QuotaConfig (Unlimited default)
-  const tiers: SubscriptionTier[] = ['FREE', 'PRO', 'PRO_PLUS', 'ELITE'];
-  for (const tier of tiers) {
+  // 2. Seed QuotaConfig (v1.5 — includes daily image limits)
+  const quotaConfigs: {
+    tier: SubscriptionTier;
+    dailyTokenLimit: number | null;
+    dailyRegenerateLimit: number | null;
+    dailyImageLimit: number | null;
+  }[] = [
+    { tier: 'FREE',     dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 3 },
+    { tier: 'PRO',      dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 10 },
+    { tier: 'PRO_PLUS', dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 20 },
+    { tier: 'ELITE',    dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 30 },
+  ];
+  for (const cfg of quotaConfigs) {
     await prisma.quotaConfig.upsert({
-      where: { tier },
-      update: { dailyTokenLimit: null },
-      create: {
-        tier,
-        dailyTokenLimit: null,
-        dailyRegenerateLimit: null, // unlimited
-      },
+      where: { tier: cfg.tier },
+      update: { dailyTokenLimit: cfg.dailyTokenLimit, dailyImageLimit: cfg.dailyImageLimit },
+      create: cfg,
     });
   }
   console.log('✅ Quota configurations seeded.');
+
+  // 2c. Seed CreditConfig (v1.5 — credit allowances per tier)
+  const creditConfigs: {
+    tier: SubscriptionTier;
+    monthlyCredits: number | null;
+    dailyCredits: number | null;
+    trialCredits: number | null;
+  }[] = [
+    { tier: 'FREE',     monthlyCredits: null,  dailyCredits: 500,  trialCredits: 2000 },
+    { tier: 'PRO',      monthlyCredits: 15000, dailyCredits: null, trialCredits: null },
+    { tier: 'PRO_PLUS', monthlyCredits: 27000, dailyCredits: null, trialCredits: null },
+    { tier: 'ELITE',    monthlyCredits: 60000, dailyCredits: null, trialCredits: null },
+  ];
+  for (const cfg of creditConfigs) {
+    await prisma.creditConfig.upsert({
+      where: { tier: cfg.tier },
+      update: {},
+      create: cfg,
+    });
+  }
+  console.log('✅ Credit configurations seeded.');
 
   // 2b. Seed ModelPricing
   await prisma.modelPricing.createMany({
@@ -96,6 +123,11 @@ async function main() {
       role: ModelRole.FREE_TIER_MODEL,
       provider: 'google',
       modelId: 'gemini-3.5-flash',
+    },
+    {
+      role: ModelRole.IMAGE_GENERATOR,
+      provider: 'openai',
+      modelId: 'dall-e-3',
     },
   ];
 

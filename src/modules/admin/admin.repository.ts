@@ -80,6 +80,20 @@ export class AdminRepository extends BaseRepository<AdminUser> {
     });
   }
 
+  // CreditConfig CRUD (v1.5)
+  async findAllCreditConfigs() {
+    return this.prisma.creditConfig.findMany({
+      orderBy: { tier: 'asc' },
+    });
+  }
+
+  async updateCreditConfig(id: string, data: any) {
+    return this.prisma.creditConfig.update({
+      where: { id },
+      data,
+    });
+  }
+
   // ModelPricing CRUD
   async findAllModelPricings() {
     return this.prisma.modelPricing.findMany({

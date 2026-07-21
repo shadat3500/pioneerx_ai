@@ -7,6 +7,9 @@ import { AdminRepository } from './admin.repository';
 import { AdminJwtStrategy } from './strategies/admin-jwt.strategy';
 import { AiProviderModule } from '../ai-provider/ai-provider.module';
 import { TokenModule } from '../token/token.module';
+import { NotificationModule } from '../notification/notification.module';
+import { PromoModule } from '../promo/promo.module';
+import { ReviewModule } from '../review/review.module';
 
 @Module({
   imports: [
@@ -21,6 +24,9 @@ import { TokenModule } from '../token/token.module';
     }),
     AiProviderModule,
     TokenModule,
+    NotificationModule,
+    PromoModule,
+    ReviewModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminRepository, AdminJwtStrategy],

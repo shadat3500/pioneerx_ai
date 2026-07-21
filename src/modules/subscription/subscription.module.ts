@@ -6,12 +6,14 @@ import { SubscriptionRepository } from './subscription.repository';
 import { TrialExpiryService } from './trial-expiry.service';
 import { TrialExpiryProcessor } from './trial-expiry.processor';
 import { TrialExpiryCronRegister } from './trial-expiry.cron-register';
+import { CreditModule } from '../credit/credit.module';
 
 @Module({
   imports: [
     BullModule.registerQueue({
       name: 'trial-expiry',
     }),
+    CreditModule,
   ],
   controllers: [SubscriptionController],
   providers: [

@@ -1,11 +1,10 @@
 {
   "info": {
-    "_postman_id": "2f56bf7a-2d4c-4605-94e7-8e002378b4c0",
-    "name": "PioneerX AI API v1.4",
-    "description": "PioneerX AI API Collection — Backend v1.4.\n\nChanges from v1.3:\n- Section-scoped chatbot (Conversations)\n- Generate action steps + suggested links from conversation\n- Removed POST /sections/:key/generate\n- Removed Shopify integrations\n- Removed Tools & Features / AI Tips (admin + output)\n- Free tier max 3 business profiles",
+    "_postman_id": "7a91cd3e-5b12-4f88-a3d1-90c4e51b72aa",
+    "name": "PioneerX AI API v1.5",
+    "description": "PioneerX AI API Collection — Backend v1.5.\n\nChanges from v1.4:\n- Credit system (GET /credit-status, credits reserved/confirmed per AI call)\n- Image generation (POST /image/generate — logo / business card, DALL-E 3)\n- Notifications (list unread, mark read, mark all read)\n- Promo codes (POST /auth/apply-promo, optional promoCode at register/magic-link)\n- Reviews (public GET /reviews, authenticated POST /reviews, admin moderation)\n- Send Message now auto-generates action steps + links (returns generationId, action_steps, suggested_links, creditStatus)\n- GET /saved-outputs supports optional ?sectionKey= filter\n- GET /sections now returns ALL sections with isLocked flag\n- Admin: credit configs, broadcast notifications, promo code CRUD, review moderation\n- Quota config now includes dailyImageLimit",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "_exporter_id": "53975265",
-    "_collection_link": "https://go.postman.co/collection/53975265-2f56bf7a-2d4c-4605-94e7-8e002378b4c0?source=collection_link"
+    "_exporter_id": "53975265"
   },
   "item": [
     {
@@ -35,7 +34,7 @@
                 "magic-link"
               ]
             },
-            "description": "Sends a magic link login email. If user does not exist, creates account with 3-day trial. Always returns { message: 'Check your email' }."
+            "description": "Sends a magic link login email. If user does not exist, creates account with 3-day trial. Always returns { message: 'Check your email' }.\n\nv1.5: Body also accepts optional \"promoCode\" (string). If provided and the account is new, the promo trial is applied at signup."
           },
           "response": []
         },
@@ -98,6 +97,34 @@
               ]
             },
             "description": "Redirects the user to Google OAuth consent screen. Open this in a browser, not Postman."
+          },
+          "response": []
+        },
+        {
+          "name": "Apply Promo Code",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"code\": \"LAUNCH30\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/auth/apply-promo",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "apply-promo"
+              ]
+            },
+            "description": "NEW in v1.5. Applies a promo code to the current (authenticated) user and extends/starts their trial by the code's trialDays.\n\nErrors: 404 invalid code, 400 expired / max uses reached / already redeemed by this user."
           },
           "response": []
         }
@@ -320,7 +347,8 @@
               "path": [
                 "sections"
               ]
-            }
+            },
+            "description": "v1.5: Returns ALL active sections (no tier filtering). Each item includes isLocked (boolean) so the UI can show locked sections with an upgrade prompt."
           },
           "response": []
         },
@@ -376,6 +404,9 @@
                   "var jsonData = pm.response.json();",
                   "if (jsonData.data && jsonData.data.message) {",
                   "    console.log('Assistant:', jsonData.data.message.content);",
+                  "}",
+                  "if (jsonData.data && jsonData.data.generationId) {",
+                  "    pm.collectionVariables.set(\"generation_id\", jsonData.data.generationId);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -405,7 +436,7 @@
                 "message"
               ]
             },
-            "description": "Saves user message, calls AI with last 10 messages as context, saves assistant reply.\n\nBody: { content: string }\n\nReturns: { message, tokenStatus }"
+            "description": "Saves user message, calls AI with last 10 messages as context, saves assistant reply.\n\nBody: { content: string }\n\nv1.5: Action steps + suggested links are auto-generated after EVERY message. Credits are reserved before the AI call and confirmed after (refunded on failure).\n\nReturns: { message, generationId, action_steps[4], suggested_links[4], tokenStatus, creditStatus }\n\nErrors: 402 if insufficient credits.\n\nAuto-saves generation_id to collection variable for Save Output."
           },
           "response": []
         },
@@ -439,12 +470,193 @@
                 "generate"
               ]
             },
-            "description": "Triggered by the Generate button. Uses last 10 conversation messages.\nNo body required.\n\nReturns: { generationId, action_steps[4], suggested_links[4], tokenStatus }\n\nAuto-saves generation_id to collection variable for Save Output."
+            "description": "Manual re-generate. Uses last 10 conversation messages.\nNo body required.\n\nv1.5: Consumes credits (402 if insufficient). Response also includes creditStatus.\n\nReturns: { generationId, action_steps[4], suggested_links[4], tokenStatus, creditStatus }\n\nAuto-saves generation_id to collection variable for Save Output."
           },
           "response": []
         }
       ],
-      "description": "v1.4 section-scoped chatbot. Replaces the old single-prompt generate flow."
+      "description": "Section-scoped chatbot. v1.5: every message auto-generates action steps + suggested links and consumes credits."
+    },
+    {
+      "name": "Credits",
+      "item": [
+        {
+          "name": "Get Credit Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/credit-status",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "credit-status"
+              ]
+            },
+            "description": "NEW in v1.5. Returns the current user's credit balance:\n{ balance, monthlyAllowance, dailyAllowance, resetsAt, tier }\n\nFree/Trial users reset daily (cron), paid tiers reset on billing cycle (RevenueCat webhook)."
+          },
+          "response": []
+        }
+      ],
+      "description": "NEW in v1.5 — credit system. Every AI call reserves credits, confirms on success, refunds on failure."
+    },
+    {
+      "name": "Image Generation",
+      "item": [
+        {
+          "name": "Generate Image (Logo / Business Card)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"prompt\": \"Minimal logo for a coffee brand\",\n    \"type\": \"logo\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/image/generate",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "image",
+                "generate"
+              ]
+            },
+            "description": "NEW in v1.5. Generates an image with DALL-E 3.\n\nBody: { prompt: string (max 2000), type: 'logo' | 'business_card' }\n\nChecks daily image limit (quota config dailyImageLimit per tier) and credit balance. Credits reserved before the call, confirmed after, refunded on failure.\n\nReturns: { imageUrl, creditStatus }\n\nErrors: 403 daily image limit reached, 402 insufficient credits."
+          },
+          "response": []
+        }
+      ],
+      "description": "NEW in v1.5 — DALL-E 3 image generation for logos and business cards."
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List Unread Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/notifications",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "notifications"
+              ]
+            },
+            "description": "NEW in v1.5. Returns unread notifications for the current user (low_credit, model_update, platform_update, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/notifications/read-all",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "notifications",
+                "read-all"
+              ]
+            },
+            "description": "NEW in v1.5. Marks all of the current user's notifications as read."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/notifications/:id/read",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "notifications",
+                ":id",
+                "read"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "notification-uuid"
+                }
+              ]
+            },
+            "description": "NEW in v1.5. Marks a single notification as read."
+          },
+          "response": []
+        }
+      ],
+      "description": "NEW in v1.5 — in-app notifications."
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "List Approved Reviews (Public)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/reviews",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "reviews"
+              ]
+            },
+            "description": "NEW in v1.5. PUBLIC endpoint (no auth). Returns approved reviews only, used by the landing page testimonials section."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Review",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"roleCompany\": \"Founder, NovaMint\",\n    \"reviewText\": \"PioneerX replaced 6 separate tools for me.\",\n    \"rating\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/reviews",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "reviews"
+              ]
+            },
+            "description": "NEW in v1.5. Authenticated user submits a review.\n\nBody: { roleCompany?: string, reviewText: string, rating?: 1-5 }\n\nOne review per user — the reviewer name is taken from the user's account (not from the body). Submitting again UPDATES the existing review.\n\nReviews are AUTO-APPROVED and appear in GET /reviews immediately. Admin can hide one later via PATCH /admin/reviews/:id/reject."
+          },
+          "response": []
+        }
+      ],
+      "description": "NEW in v1.5 — real review system. Reviews go live immediately (auto-approved); admin can hide any review via reject."
     },
     {
       "name": "Generation (Saved Outputs)",
@@ -469,7 +681,8 @@
                   "value": "{{generation_id}}"
                 }
               ]
-            }
+            },
+            "description": "v1.5: Response now also includes the linked conversation and its messages."
           },
           "response": []
         },
@@ -538,20 +751,28 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{url}}/saved-outputs",
+              "raw": "{{url}}/saved-outputs?sectionKey={{section_key}}",
               "host": [
                 "{{url}}"
               ],
               "path": [
                 "saved-outputs"
+              ],
+              "query": [
+                {
+                  "key": "sectionKey",
+                  "value": "{{section_key}}",
+                  "description": "v1.5: optional — filter saved outputs by section. Remove/disable to get all.",
+                  "disabled": true
+                }
               ]
             },
-            "description": "Filtered by current user + active business profile."
+            "description": "Filtered by current user + active business profile.\n\nv1.5: Supports optional ?sectionKey= query param to filter by section (enable the query param to use it)."
           },
           "response": []
         }
       ],
-      "description": "Save / unsave / list generation results. Old POST /sections/:key/generate removed in v1.4."
+      "description": "Save / unsave / list generation results."
     },
     {
       "name": "Daily Tasks",
@@ -697,7 +918,8 @@
                 "webhooks",
                 "revenuecat"
               ]
-            }
+            },
+            "description": "v1.5: INITIAL_PURCHASE and RENEWAL for paid tiers also reset the user's credit balance to the tier's monthlyCredits."
           },
           "response": []
         }
@@ -780,7 +1002,8 @@
                     "admin",
                     "ai-configs"
                   ]
-                }
+                },
+                "description": "v1.5: Includes the new IMAGE_GENERATOR role config (DALL-E 3)."
               },
               "response": []
             },
@@ -931,7 +1154,8 @@
                     "admin",
                     "quota-configs"
                   ]
-                }
+                },
+                "description": "v1.5: Each quota now includes dailyImageLimit."
               },
               "response": []
             },
@@ -942,7 +1166,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"dailyTokenLimit\": 50000,\n    \"dailyRegenerateLimit\": 5\n}",
+                  "raw": "{\n    \"dailyTokenLimit\": 50000,\n    \"dailyRegenerateLimit\": 5,\n    \"dailyImageLimit\": 3\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -965,7 +1189,8 @@
                       "value": "quota-id"
                     }
                   ]
-                }
+                },
+                "description": "v1.5: New optional field dailyImageLimit (images per day for the tier)."
               },
               "response": []
             }
@@ -1081,6 +1306,342 @@
           ]
         },
         {
+          "name": "Credit Configs",
+          "item": [
+            {
+              "name": "List Credit Configs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/credit-configs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "credit-configs"
+                  ]
+                },
+                "description": "NEW in v1.5. Lists credit configs per tier: { tier, monthlyCredits, dailyCredits, trialCredits }."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Credit Config",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"monthlyCredits\": 15000,\n    \"dailyCredits\": 500,\n    \"trialCredits\": 2000\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/credit-configs/:id",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "credit-configs",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "credit-config-id"
+                    }
+                  ]
+                },
+                "description": "NEW in v1.5. All fields optional; send null to disable a field for the tier."
+              },
+              "response": []
+            }
+          ],
+          "description": "NEW in v1.5 — per-tier credit allowances."
+        },
+        {
+          "name": "Notifications",
+          "item": [
+            {
+              "name": "Broadcast Notification",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"type\": \"platform_update\",\n    \"message\": \"A new AI model has been added to PioneerX.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/notifications/broadcast",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "notifications",
+                    "broadcast"
+                  ]
+                },
+                "description": "NEW in v1.5. Sends a notification to ALL users.\n\nBody: { type: 'model_update' | 'platform_update', message: string (max 500) }"
+              },
+              "response": []
+            }
+          ],
+          "description": "NEW in v1.5 — broadcast notifications to all users."
+        },
+        {
+          "name": "Promo Codes",
+          "item": [
+            {
+              "name": "List Promo Codes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/promo-codes",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "promo-codes"
+                  ]
+                },
+                "description": "NEW in v1.5. Lists all promo codes with redemption counts."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Promo Code",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"code\": \"LAUNCH30\",\n    \"trialDays\": 30,\n    \"maxUses\": 100,\n    \"expiresAt\": \"2026-12-31T23:59:59Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/promo-codes",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "promo-codes"
+                  ]
+                },
+                "description": "NEW in v1.5.\n\nBody: { code: string, trialDays: number, maxUses?: number (omit = unlimited), expiresAt?: ISO date (omit = never expires) }"
+              },
+              "response": []
+            },
+            {
+              "name": "Update Promo Code",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"isActive\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/promo-codes/:id",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "promo-codes",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "promo-code-id"
+                    }
+                  ]
+                },
+                "description": "NEW in v1.5. All fields optional: { isActive?, trialDays?, maxUses?, expiresAt? }"
+              },
+              "response": []
+            }
+          ],
+          "description": "NEW in v1.5 — promo code management."
+        },
+        {
+          "name": "Reviews",
+          "item": [
+            {
+              "name": "List All Reviews",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/reviews",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews"
+                  ]
+                },
+                "description": "NEW in v1.5. Lists ALL reviews (approved + pending)."
+              },
+              "response": []
+            },
+            {
+              "name": "List Pending Reviews",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/reviews/pending",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews",
+                    "pending"
+                  ]
+                },
+                "description": "NEW in v1.5. Lists reviews awaiting approval (isApproved=false)."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Review (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"name\": \"Sarah Chen\",\n    \"roleCompany\": \"Founder, NovaMint\",\n    \"reviewText\": \"PioneerX replaced 6 separate tools for me.\",\n    \"rating\": 5,\n    \"avatarUrl\": \"https://example.com/avatar.jpg\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/admin/reviews",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews"
+                  ]
+                },
+                "description": "NEW in v1.5. Admin-created review — instantly approved."
+              },
+              "response": []
+            },
+            {
+              "name": "Approve Review",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/reviews/:id/approve",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews",
+                    ":id",
+                    "approve"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review-id"
+                    }
+                  ]
+                },
+                "description": "NEW in v1.5. Approves a review so it appears in public GET /reviews."
+              },
+              "response": []
+            },
+            {
+              "name": "Reject Review",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/reviews/:id/reject",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews",
+                    ":id",
+                    "reject"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review-id"
+                    }
+                  ]
+                },
+                "description": "NEW in v1.5. Hides a review from public GET /reviews (sets isApproved=false) without deleting it. Re-approve later with PATCH /admin/reviews/:id/approve."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Review",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/reviews/:id",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reviews",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "review-id"
+                    }
+                  ]
+                },
+                "description": "NEW in v1.5. Permanently deletes a review."
+              },
+              "response": []
+            }
+          ],
+          "description": "NEW in v1.5 — review moderation."
+        },
+        {
           "name": "Admin Login",
           "event": [
             {
@@ -1190,7 +1751,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\",\n    \"name\": \"John Doe\"\n}",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"password123\",\n    \"name\": \"John Doe\",\n    \"promoCode\": \"LAUNCH30\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1206,7 +1767,8 @@
                 "auth",
                 "register"
               ]
-            }
+            },
+            "description": "v1.5: Body accepts optional \"promoCode\" — applied at signup if valid (remove the field if not needed)."
           },
           "response": []
         },

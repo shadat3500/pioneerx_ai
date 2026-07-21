@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GenerationService } from './generation.service';
 import { SaveOutputDto } from './dto/generate.dto';
@@ -37,8 +37,11 @@ export class GenerationController {
 
   @Get('saved-outputs')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Retrieve all saved outputs for current user' })
-  getSavedOutputs(@GetCurrentUser('sub') userId: string) {
-    return this.generationService.getSavedOutputs(userId);
+  @ApiOperation({ summary: 'Retrieve saved outputs for current user (optionally filtered by section)' })
+  getSavedOutputs(
+    @GetCurrentUser('sub') userId: string,
+    @Query('sectionKey') sectionKey?: string,
+  ) {
+    return this.generationService.getSavedOutputs(userId, sectionKey);
   }
 }

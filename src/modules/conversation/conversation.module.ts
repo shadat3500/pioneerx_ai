@@ -6,6 +6,7 @@ import { AiProviderModule } from '../ai-provider/ai-provider.module';
 import { TokenModule } from '../token/token.module';
 import { BusinessProfileModule } from '../business-profile/business-profile.module';
 import { DailyTaskModule } from '../daily-task/daily-task.module';
+import { CreditModule } from '../credit/credit.module';
 import { SectionAccessGuard } from '../generation/guards/section-access.guard';
 
 @Module({
@@ -13,6 +14,7 @@ import { SectionAccessGuard } from '../generation/guards/section-access.guard';
     AiProviderModule,
     TokenModule,
     BusinessProfileModule,
+    CreditModule,
     forwardRef(() => DailyTaskModule),
   ],
   controllers: [ConversationController],

@@ -1,12 +1,16 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { SubscriptionRepository } from './subscription.repository';
 import { SubscriptionTier } from '@prisma/client';
+import { CreditService } from '../credit/credit.service';
 
 @Injectable()
 export class SubscriptionService {
   private readonly logger = new Logger(SubscriptionService.name);
 
-  constructor(private readonly repository: SubscriptionRepository) { }
+  constructor(
+    private readonly repository: SubscriptionRepository,
+    private readonly creditService: CreditService,
+  ) { }
 
   private mapProductToTier(productId: string): SubscriptionTier {
     if (!productId) return SubscriptionTier.FREE;
@@ -64,6 +68,19 @@ export class SubscriptionService {
       status,
       renewsAt,
     });
+
+    // v1.5 §11 — reset monthly credits when the billing cycle renews
+    if (
+      (eventType === 'RENEWAL' || eventType === 'INITIAL_PURCHASE') &&
+      targetTier !== SubscriptionTier.FREE
+    ) {
+      try {
+        await this.creditService.resetOnBillingCycle(userId);
+        this.logger.log(`Credit balance reset on billing cycle for User ${userId}`);
+      } catch (err) {
+        this.logger.error(`Credit reset failed for User ${userId}: ${(err as Error).message}`);
+      }
+    }
 
     this.logger.log(`Successfully updated User ${userId} subscription tier to ${targetTier}`);
     return { success: true };
