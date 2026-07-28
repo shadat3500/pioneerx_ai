@@ -42,6 +42,18 @@ export class SubscriptionRepository extends BaseRepository<Subscription> {
     });
   }
 
+  /** Returns true when this provider event was already processed. */
+  async recordWebhookEvent(provider: string, eventId: string, type: string) {
+    try {
+      await this.prisma.webhookEvent.create({
+        data: { provider, eventId, type },
+      });
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   async findUsersWithExpiredTrial(now: Date) {
     return this.prisma.user.findMany({
       where: {

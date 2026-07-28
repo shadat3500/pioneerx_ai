@@ -21,6 +21,7 @@ import { GenerationModule } from './modules/generation/generation.module';
 import { SectionModule } from './modules/section/section.module';
 import { DailyTaskModule } from './modules/daily-task/daily-task.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { TokenModule } from './modules/token/token.module';
 import { ConversationModule } from './modules/conversation/conversation.module';
 import { CreditModule } from './modules/credit/credit.module';
@@ -28,6 +29,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { ImageModule } from './modules/image/image.module';
 import { PromoModule } from './modules/promo/promo.module';
 import { ReviewModule } from './modules/review/review.module';
+import { SitePageModule } from './modules/site-page/site-page.module';
 import { BullModule } from '@nestjs/bullmq';
 
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -64,6 +66,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     SectionModule,
     DailyTaskModule,
     SubscriptionModule,
+    BillingModule,
     ConversationModule,
     TokenModule,
     CreditModule,
@@ -71,6 +74,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
     ImageModule,
     PromoModule,
     ReviewModule,
+    SitePageModule,
   ],
 
 

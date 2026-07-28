@@ -63,9 +63,19 @@ export class ConversationRepository {
     });
   }
 
-  async createMessage(conversationId: string, role: 'user' | 'assistant', content: string) {
+  async createMessage(
+    conversationId: string,
+    role: 'user' | 'assistant',
+    content: string,
+    imageUrl?: string | null,
+  ) {
     return this.prisma.message.create({
-      data: { conversationId, role, content },
+      data: {
+        conversationId,
+        role,
+        content,
+        ...(imageUrl ? { imageUrl } : {}),
+      },
     });
   }
 

@@ -10,6 +10,7 @@ import { TokenModule } from '../token/token.module';
 import { NotificationModule } from '../notification/notification.module';
 import { PromoModule } from '../promo/promo.module';
 import { ReviewModule } from '../review/review.module';
+import { SitePageModule } from '../site-page/site-page.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ReviewModule } from '../review/review.module';
     NotificationModule,
     PromoModule,
     ReviewModule,
+    SitePageModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, AdminRepository, AdminJwtStrategy],

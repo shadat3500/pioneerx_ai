@@ -195,4 +195,132 @@ export class AdminRepository extends BaseRepository<AdminUser> {
 
     return { data, total };
   }
+
+  async findDashboardStats() {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+    const [
+      totalUsers,
+      trialUsers,
+      paidUsers,
+      freeSubscribed,
+      usersForGrowth,
+      recentUsers,
+      tokenCostAll,
+      tokenCostMonth,
+      tokenCostToday,
+      tokenByMonthRaw,
+      tierGroups,
+      usersWithoutSub,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({
+        where: { trialEndsAt: { gt: now } },
+      }),
+      this.prisma.subscription.count({
+        where: { tier: { not: 'FREE' } },
+      }),
+      this.prisma.subscription.count({
+        where: { tier: 'FREE' },
+      }),
+      this.prisma.user.findMany({
+        where: { createdAt: { gte: twelveMonthsAgo } },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.user.findMany({
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+          subscription: { select: { tier: true } },
+        },
+      }),
+      this.prisma.tokenUsage.aggregate({
+        _sum: { estimatedCostUsd: true, inputTokens: true, outputTokens: true },
+      }),
+      this.prisma.tokenUsage.aggregate({
+        where: { date: { gte: startOfMonth } },
+        _sum: { estimatedCostUsd: true },
+      }),
+      this.prisma.tokenUsage.aggregate({
+        where: { date: { gte: startOfToday } },
+        _sum: { estimatedCostUsd: true },
+      }),
+      this.prisma.tokenUsage.findMany({
+        where: { date: { gte: twelveMonthsAgo } },
+        select: { date: true, estimatedCostUsd: true },
+      }),
+      this.prisma.subscription.groupBy({
+        by: ['tier'],
+        _count: { tier: true },
+      }),
+      this.prisma.user.count({
+        where: { subscription: null },
+      }),
+    ]);
+
+    return {
+      totalUsers,
+      trialUsers,
+      paidUsers,
+      freeSubscribed,
+      usersWithoutSub,
+      usersForGrowth,
+      recentUsers,
+      tokenCostAll,
+      tokenCostMonth,
+      tokenCostToday,
+      tokenByMonthRaw,
+      tierGroups,
+    };
+  }
+
+  // Stripe price → tier map
+  async findAllStripePrices() {
+    return this.prisma.stripePrice.findMany({
+      orderBy: [{ tier: 'asc' }, { interval: 'asc' }],
+    });
+  }
+
+  async findStripePriceById(id: string) {
+    return this.prisma.stripePrice.findUnique({ where: { id } });
+  }
+
+  async findStripePriceByPriceId(priceId: string) {
+    return this.prisma.stripePrice.findUnique({ where: { priceId } });
+  }
+
+  async createStripePrice(data: any) {
+    return this.prisma.stripePrice.create({ data });
+  }
+
+  async updateStripePrice(id: string, data: any) {
+    return this.prisma.stripePrice.update({ where: { id }, data });
+  }
+
+  async deleteStripePrice(id: string) {
+    return this.prisma.stripePrice.delete({ where: { id } });
+  }
+
+  // Payments
+  async findPayments(skip: number, take: number) {
+    return Promise.all([
+      this.prisma.paymentRecord.findMany({
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        include: { user: { select: { id: true, email: true, name: true } } },
+      }),
+      this.prisma.paymentRecord.count(),
+    ]);
+  }
 }

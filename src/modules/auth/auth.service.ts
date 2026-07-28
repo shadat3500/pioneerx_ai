@@ -272,9 +272,11 @@ export class AuthService {
 
   async requestMagicLink(dto: RequestMagicLinkDto) {
     let user = await this.usersRepo.findByEmail(dto.email);
+    // Dev convenience: instant login (no email) for test@gmail.com and *@pioneerx.dev
+    const emailLower = dto.email.toLowerCase();
     const isDevMagicUser =
-      dto.email === 'test@gmail.com' &&
-      this.config.get<string>('NODE_ENV') !== 'production';
+      this.config.get<string>('NODE_ENV') !== 'production' &&
+      (emailLower === 'test@gmail.com' || emailLower.endsWith('@pioneerx.dev'));
 
     if (!user) {
       const randomPassword = randomBytes(32).toString('hex');

@@ -185,7 +185,7 @@ async function main() {
   ];
 
   for (const sec of sectionsData) {
-    const section = await prisma.section.upsert({
+    await prisma.section.upsert({
       where: { key: sec.key },
       update: {
         name: sec.name,
@@ -199,26 +199,8 @@ async function main() {
         requiredTier: sec.requiredTier,
       },
     });
-
-    // Seed an initial active PromptTemplate per Section
-    const activeTemplate = await prisma.promptTemplate.findFirst({
-      where: { sectionId: section.id, isActive: true },
-    });
-
-    if (!activeTemplate) {
-      await prisma.promptTemplate.create({
-        data: {
-          sectionId: section.id,
-          systemPrompt: `You are the Expert AI Advisory module for "${sec.name}" in the PioneerX platform.
-Help the user validate, launch, and grow their business specifically focusing on ${sec.name}.
-Always output structured analysis matching the requested response format.`,
-          version: 1,
-          isActive: true,
-        },
-      });
-    }
   }
-  console.log('✅ Section catalog and default prompt templates seeded.');
+  console.log('✅ Section catalog seeded (prompts: run npm run seed:prompts separately).');
 
   console.log('🌱 Seeding complete!');
 }

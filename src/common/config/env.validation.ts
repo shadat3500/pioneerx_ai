@@ -22,8 +22,17 @@ export const validationSchema = Joi.object({
   // Crypto / AES encryption key
   ENCRYPTION_KEY: Joi.string().length(64).default('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'), // Default 32-byte hex for local dev
 
-  // RevenueCat
+  // RevenueCat (mobile in-app purchase)
   REVENUECAT_SECRET_KEY: Joi.string().allow('').optional(),
+
+  // Stripe (web checkout) — all optional so the API boots without billing configured
+  STRIPE_SECRET_KEY: Joi.string().allow('').optional(),
+  STRIPE_WEBHOOK_SECRET: Joi.string().allow('').optional(),
+  STRIPE_PUBLISHABLE_KEY: Joi.string().allow('').optional(),
+  STRIPE_CURRENCY: Joi.string().default('usd'),
+  STRIPE_SUCCESS_URL: Joi.string().allow('').optional(),
+  STRIPE_CANCEL_URL: Joi.string().allow('').optional(),
+  STRIPE_PORTAL_RETURN_URL: Joi.string().allow('').optional(),
 
   // AI Provider Keys
   OPENAI_API_KEY: Joi.string().allow('').optional(),
@@ -42,6 +51,7 @@ export const validationSchema = Joi.object({
 
   // Frontend URL (used for magic link verification link)
   FRONTEND_URL: Joi.string().allow('').optional(),
+  CORS_ORIGINS: Joi.string().allow('').optional(),
 });
 
 

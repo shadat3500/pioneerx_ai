@@ -45,6 +45,19 @@ export class SubscriptionService {
 
     this.logger.log(`RevenueCat event: ${eventType} for User: ${userId}, Product: ${productId}`);
 
+    // RevenueCat retries delivery; the unique (provider, eventId) row is the guard.
+    if (event.id) {
+      const isDuplicate = await this.repository.recordWebhookEvent(
+        'revenuecat',
+        String(event.id),
+        String(eventType ?? 'unknown'),
+      );
+      if (isDuplicate) {
+        this.logger.log(`Duplicate RevenueCat event ${event.id} ignored.`);
+        return { success: true, duplicate: true };
+      }
+    }
+
     // Verify user exists in database
     const user = await this.repository.findUserById(userId);
     if (!user) {
@@ -62,11 +75,28 @@ export class SubscriptionService {
 
     const renewsAt = expirationAtMs ? new Date(expirationAtMs) : null;
 
+    // A store cancellation must not wipe a plan the user bought on the website
+    // through Stripe (and vice versa — see the mirror rule in StripeWebhookService).
+    const existing = await this.repository.findByUserId(userId);
+    const otherProviderOwnsPaidPlan =
+      !!existing?.provider &&
+      existing.provider !== 'revenuecat' &&
+      existing.status === 'active' &&
+      existing.tier !== SubscriptionTier.FREE;
+
+    if (targetTier === SubscriptionTier.FREE && otherProviderOwnsPaidPlan) {
+      this.logger.warn(
+        `Skipped RevenueCat downgrade for User ${userId}: ${existing?.provider} owns an active ${existing?.tier} plan.`,
+      );
+      return { success: true, skipped: 'other_provider_owns_subscription' };
+    }
+
     await this.repository.upsertSubscription(userId, {
       tier: targetTier,
       revenuecatEntitlementId: entitlementId || null,
       status,
       renewsAt,
+      provider: 'revenuecat',
     });
 
     // v1.5 §11 — reset monthly credits when the billing cycle renews

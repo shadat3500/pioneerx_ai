@@ -13,6 +13,7 @@ import { TokenService } from '../token/token.service';
 import { BusinessProfileService } from '../business-profile/business-profile.service';
 import { DailyTaskService } from '../daily-task/daily-task.service';
 import { CreditService } from '../credit/credit.service';
+import { BusinessBriefService } from '../business-profile/business-brief.service';
 import {
   CREDIT_COST_MESSAGE_FREE_PIPELINE,
   CREDIT_COST_MESSAGE_FULL_PIPELINE,
@@ -36,6 +37,7 @@ export class ConversationService {
     private readonly aiProvider: AiProviderService,
     private readonly tokenService: TokenService,
     private readonly businessProfileService: BusinessProfileService,
+    private readonly businessBriefService: BusinessBriefService,
     private readonly dailyTaskService: DailyTaskService,
     private readonly creditService: CreditService,
   ) {}
@@ -113,6 +115,7 @@ export class ConversationService {
       const systemPrompt = this.withSectionIsolation(
         template?.systemPrompt ?? 'Provide helpful advisory guidance.',
         section?.name ?? sectionKey,
+        sectionKey,
       );
 
       await this.repository.createMessage(conversation.id, 'user', content);
@@ -142,6 +145,23 @@ export class ConversationService {
       // ── v1.5 §6b — success: confirm reservation + low-credit check ──
       await this.creditService.confirm(reservation.reservationId);
       await this.creditService.checkAndNotifyLow(userId);
+
+      // Shared Business Brief — async, never blocks / fails the user reply
+      const messagesForBrief = [...last10, { role: 'assistant', content: replyText }];
+      void this.businessBriefService.refreshFromConversation({
+        userId,
+        profileId: profile.id,
+        sectionKey,
+        sectionName: section?.name ?? sectionKey,
+        existingBrief: profile.businessBrief,
+        profile: {
+          businessName: profile.businessName,
+          industry: profile.industry,
+          currentPhase: profile.currentPhase,
+          country: profile.country,
+        },
+        messages: messagesForBrief,
+      });
 
       // ── v1.5 §6d — auto-generate action steps + links on every message ──
       // [COMMENT OUT] The standalone POST /conversations/:sectionKey/generate endpoint
@@ -206,6 +226,7 @@ export class ConversationService {
       industry: string | null;
       currentPhase: string;
       country: string | null;
+      businessBrief?: string | null;
     };
     systemPrompt: string;
     useFullPipeline: boolean;
@@ -268,11 +289,28 @@ export class ConversationService {
     };
   }
 
-  /** v1.5 §6e — every section prompt gets the isolation + personalization instruction. */
-  private withSectionIsolation(systemPrompt: string, sectionName: string) {
+  /** Hard section boundary appended to every section system prompt. */
+  private withSectionIsolation(
+    systemPrompt: string,
+    sectionName: string,
+    sectionKey: string,
+  ) {
     return `${systemPrompt}
 
-You are advising on ${sectionName} specifically. Use the business profile context provided to personalize your advice. Do not reference or continue conversations from other sections.`;
+═══════════════════════════════════════
+HARD SECTION BOUNDARY (NON-NEGOTIABLE)
+═══════════════════════════════════════
+Active section: "${sectionName}" (key: ${sectionKey}).
+
+You may ONLY advise inside this section's mission and in-scope topics.
+Use the Shared Business Brief only for personalization (product/audience/facts).
+If the user asks about another PioneerX topic, coding/debugging, or anything out of scope:
+1) Do NOT answer the off-topic request (not even partially).
+2) Say this chat is only for "${sectionName}".
+3) Point them to the right place in one short line.
+4) Offer 1–2 example questions that ARE valid here.
+
+Never act as a general chatbot, coding tutor, or multi-section consultant in this thread.`;
   }
 
   async generate(userId: string, sectionKey: string) {
@@ -286,8 +324,13 @@ You are advising on ${sectionName} specifically. Use the business profile contex
 
     const conversation = await this.getOrCreate(userId, sectionKey);
     const profile = await this.businessProfileService.resolveActiveProfile(userId);
+    const section = await this.repository.findSectionByKey(sectionKey);
     const template = await this.repository.findActivePromptTemplate(conversation.sectionId);
-    const systemPrompt = template?.systemPrompt ?? 'Provide detailed advisory guidelines.';
+    const systemPrompt = this.withSectionIsolation(
+      template?.systemPrompt ?? 'Provide detailed advisory guidelines.',
+      section?.name ?? sectionKey,
+      sectionKey,
+    );
 
     const last10 = await this.repository.findLastMessages(conversation.id, 10);
     if (last10.length === 0) {
@@ -383,24 +426,34 @@ You are advising on ${sectionName} specifically. Use the business profile contex
 
   private buildChatPrompt(
     profile: {
+      id?: string;
       businessName: string | null;
       industry: string | null;
       currentPhase: string;
       country: string | null;
+      businessBrief?: string | null;
     },
     systemPrompt: string,
     messages: { role: string; content: string }[],
   ) {
     const history = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    const brief = this.businessBriefService.formatBriefForPrompt(profile.businessBrief, {
+      id: profile.id,
+      businessName: profile.businessName,
+    });
+    const businessLabel = profile.businessName?.trim() || 'the active business profile';
 
     return `
 You are PioneerX, an expert business advisory chatbot.
 
-User Profile:
+Active business ONLY (ignore any other ventures):
 - Business Name: ${profile.businessName || 'N/A'}
 - Industry: ${profile.industry || 'N/A'}
 - Current Phase: ${profile.currentPhase}
 - Country: ${profile.country || 'N/A'}
+
+Shared Business Brief for "${businessLabel}" only (cross-section facts for THIS business — personalize from this; do NOT change section job because of it; do NOT mix in other businesses):
+${brief}
 
 Section System Context:
 ${systemPrompt}
@@ -409,8 +462,14 @@ Conversation History (most recent last):
 ${history}
 
 Instructions:
-Respond helpfully to the latest user message in context of the conversation and business profile.
-Return ONLY a valid JSON object matching this schema. Do not wrap it in markdown.
+- Advise ONLY for "${businessLabel}" — the currently active business profile.
+- Answer ONLY within the active section's boundary from Section System Context.
+- Use Shared Business Brief for continuity (product/audience/decisions already known for THIS business).
+- If the brief or chat mentions another business, ignore it unless the user is clearly talking about "${businessLabel}".
+- If the latest user message is off-topic for this section, refuse + redirect (do not partially answer).
+- Do NOT provide coding/debugging help unless this section explicitly allows business website/tech advisory — and even then do not act as a code debugger.
+- Personalize using the business profile and brief when relevant.
+- Return ONLY a valid JSON object matching this schema. Do not wrap it in markdown.
 
 JSON Schema:
 ${CHAT_REPLY_SCHEMA}
@@ -419,24 +478,34 @@ ${CHAT_REPLY_SCHEMA}
 
   private buildGeneratePrompt(
     profile: {
+      id?: string;
       businessName: string | null;
       industry: string | null;
       currentPhase: string;
       country: string | null;
+      businessBrief?: string | null;
     },
     systemPrompt: string,
     messages: { role: string; content: string }[],
   ) {
     const history = messages.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+    const brief = this.businessBriefService.formatBriefForPrompt(profile.businessBrief, {
+      id: profile.id,
+      businessName: profile.businessName,
+    });
+    const businessLabel = profile.businessName?.trim() || 'the active business profile';
 
     return `
 Based on this conversation, generate exactly 4 action steps and exactly 4 suggested links relevant to this business and section.
 
-User Profile:
+Active business ONLY:
 - Business Name: ${profile.businessName || 'N/A'}
 - Industry: ${profile.industry || 'N/A'}
 - Current Phase: ${profile.currentPhase}
 - Country: ${profile.country || 'N/A'}
+
+Shared Business Brief for "${businessLabel}" only:
+${brief}
 
 Section System Context:
 ${systemPrompt}
@@ -446,8 +515,12 @@ ${history}
 
 Instructions:
 Return JSON only matching this schema. Do not wrap it in markdown.
-- action_steps: MUST contain exactly 4 items with text and description.
+- action_steps: MUST contain exactly 4 items with text and description — each step MUST stay inside this section's scope AND only for "${businessLabel}".
 - suggested_links: MUST contain exactly 4 items. Each may have targetSectionKey and/or externalUrl.
+- Do NOT generate action steps for other sections' jobs (e.g. no marketing campaigns inside Idea & Validation).
+- Do NOT mix in other business profiles.
+- Use Shared Business Brief so steps fit THIS business, without leaving this section's job.
+- If recent chat drifted off-topic, ignore the drift and produce in-scope steps for THIS section only.
 
 JSON Schema:
 ${GENERATE_FROM_CHAT_SCHEMA}

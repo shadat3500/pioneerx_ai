@@ -7,10 +7,13 @@ import {
   Post,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { GetCurrentUser } from './decorators/get-current-user.decorator';
 import { Public } from './decorators/public.decorator';
@@ -27,7 +30,10 @@ import { RtGuard } from './guards/rt.guard';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private config: ConfigService,
+  ) {}
 
   @Public()
   @Post('register')
@@ -108,9 +114,21 @@ export class AuthController {
   @Public()
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth callback' })
-  googleAuthCallback(@Req() req: { user: { email?: string; name?: string } }) {
-    return this.authService.oauthLogin(req.user);
+  @ApiOperation({ summary: 'Google OAuth callback — redirects to frontend with tokens' })
+  async googleAuthCallback(
+    @Req() req: { user: { email?: string; name?: string } },
+    @Res() res: Response,
+  ) {
+    const tokens = await this.authService.oauthLogin(req.user);
+    const frontendUrl = (
+      this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000'
+    ).replace(/\/$/, '');
+    const params = new URLSearchParams({
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+    });
+    // Frontend /auth/google/callback stores tokens then router.replace("/dashboard")
+    res.redirect(`${frontendUrl}/auth/google/callback?${params.toString()}`);
   }
 
   @Public()

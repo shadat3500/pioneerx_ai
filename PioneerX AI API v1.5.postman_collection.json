@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7a91cd3e-5b12-4f88-a3d1-90c4e51b72aa",
     "name": "PioneerX AI API v1.5",
-    "description": "PioneerX AI API Collection — Backend v1.5.\n\nChanges from v1.4:\n- Credit system (GET /credit-status, credits reserved/confirmed per AI call)\n- Image generation (POST /image/generate — logo / business card, DALL-E 3)\n- Notifications (list unread, mark read, mark all read)\n- Promo codes (POST /auth/apply-promo, optional promoCode at register/magic-link)\n- Reviews (public GET /reviews, authenticated POST /reviews, admin moderation)\n- Send Message now auto-generates action steps + links (returns generationId, action_steps, suggested_links, creditStatus)\n- GET /saved-outputs supports optional ?sectionKey= filter\n- GET /sections now returns ALL sections with isLocked flag\n- Admin: credit configs, broadcast notifications, promo code CRUD, review moderation\n- Quota config now includes dailyImageLimit",
+    "description": "PioneerX AI API Collection — Backend v1.5 (synced with current Nest controllers).\n\nChanges from v1.4:\n- Credit system (GET /credit-status, credits reserved/confirmed per AI call)\n- Image generation (POST /image/generate — logo / business_card via Gemini; optional sectionKey to append to chat)\n- GET /image/generations/:id — fetch stored image for chat history\n- Notifications (list unread, mark read, mark all read)\n- Promo codes (POST /auth/apply-promo, optional promoCode at register/magic-link)\n- Reviews (public GET /reviews, authenticated POST /reviews, admin moderation)\n- Send Message auto-generates action steps + links (generationId, action_steps, suggested_links, creditStatus)\n- GET /saved-outputs supports optional ?sectionKey=\n- GET /sections returns ALL sections with isLocked\n- Shared Business Brief (businessBrief on BusinessProfile) — updated server-side after chat; no dedicated public endpoint\n- Admin: credit configs, broadcast notifications, promo CRUD, review moderation\n- Also included: files upload, users CRUD, health, Apple OAuth stubs, Google callback note\n\nDefault {{url}}: http://localhost:8010/api/v1",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "53975265"
   },
@@ -101,6 +101,65 @@
           "response": []
         },
         {
+          "name": "Google OAuth — Callback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/google/callback",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "google",
+                "callback"
+              ]
+            },
+            "description": "Google redirects here with ?code=… after consent. Backend exchanges the code, issues JWTs, then 302-redirects to FRONTEND_URL/auth/google/callback?access_token=…&refresh_token=…\n\nOpen in a browser (not Postman). Ensure GOOGLE_CALLBACK_URL matches Google Cloud Console."
+          },
+          "response": []
+        },
+        {
+          "name": "Apple OAuth — Initiate",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/apple",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "apple"
+              ]
+            },
+            "description": "Redirects to Apple Sign In. Requires APPLE_* env vars. Open in a browser."
+          },
+          "response": []
+        },
+        {
+          "name": "Apple OAuth — Callback",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/apple/callback",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "apple",
+                "callback"
+              ]
+            },
+            "description": "Apple posts identity token here. Backend runs oauthLogin and returns JWT tokens (JSON)."
+          },
+          "response": []
+        },
+        {
           "name": "Apply Promo Code",
           "request": {
             "method": "POST",
@@ -147,7 +206,7 @@
                 "profile"
               ]
             },
-            "description": "Returns { activeProfile, profiles[] } for the current user."
+            "description": "Returns { activeProfile, profiles[] } for the current user.\n\nv1.5+: active BusinessProfile may include businessBrief / briefUpdatedAt / briefUpdatedFrom (server-maintained Shared Business Brief — not set via this PATCH; updated after chat)."
           },
           "response": []
         },
@@ -511,7 +570,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"prompt\": \"Minimal logo for a coffee brand\",\n    \"type\": \"logo\"\n}",
+              "raw": "{\n    \"prompt\": \"Minimal logo for a coffee brand\",\n    \"type\": \"logo\",\n    \"sectionKey\": \"idea_validation\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -528,12 +587,62 @@
                 "generate"
               ]
             },
-            "description": "NEW in v1.5. Generates an image with DALL-E 3.\n\nBody: { prompt: string (max 2000), type: 'logo' | 'business_card' }\n\nChecks daily image limit (quota config dailyImageLimit per tier) and credit balance. Credits reserved before the call, confirmed after, refunded on failure.\n\nReturns: { imageUrl, creditStatus }\n\nErrors: 403 daily image limit reached, 402 insufficient credits."
+            "description": "Generates a logo or business card image (Gemini).\n\nBody:\n- prompt: string (max 2000)\n- type: \"logo\" | \"business_card\"\n- sectionKey?: string — if set, also appends user + assistant messages to that section chat\n\nChecks dailyImageLimit + credit balance (40). Reserve → generate → confirm (refund on failure).\n\nReturns: { imageUrl (data URL / url), creditStatus, … }\nWhen sectionKey is set, chat history stores image-generation:{id}; use GET /image/generations/:id to reload full image.\n\nErrors: 403 daily image limit, 402 insufficient credits."
           },
-          "response": []
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "var d = jsonData.data || jsonData;",
+                  "if (d && d.imageUrl && String(d.imageUrl).indexOf(\"image-generation:\") === 0) {",
+                  "  pm.collectionVariables.set(\"image_generation_id\", String(d.imageUrl).replace(\"image-generation:\", \"\"));",
+                  "} else if (d && d.id) {",
+                  "  pm.collectionVariables.set(\"image_generation_id\", d.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Image Generation by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/image/generations/{{image_generation_id}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "image",
+                "generations",
+                "{{image_generation_id}}"
+              ]
+            },
+            "description": "Returns a previously generated image for the current user (chat history reload).\n\nResponse: { id, imageUrl, prompt, createdAt }\n\nUse the id from image-generation:{id} refs stored on conversation messages."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.collectionVariables.get(\"image_generation_id\")) {",
+                  "  console.warn(\"Set image_generation_id (or run Generate Image with sectionKey first)\");",
+                  "}"
+                ]
+              }
+            }
+          ]
         }
       ],
-      "description": "NEW in v1.5 — DALL-E 3 image generation for logos and business cards."
+      "description": "v1.5 — image generation via Gemini (gemini-2.5-flash-image). Cost: 40 credits. Optional sectionKey appends the image into that section conversation (message stores image-generation:{id}; full base64 via GET /image/generations/:id)."
     },
     {
       "name": "Notifications",
@@ -1003,7 +1112,7 @@
                     "ai-configs"
                   ]
                 },
-                "description": "v1.5: Includes the new IMAGE_GENERATOR role config (DALL-E 3)."
+                "description": "v1.5: Includes the IMAGE_GENERATOR role config (Gemini image model)."
               },
               "response": []
             },
@@ -1742,6 +1851,178 @@
       }
     },
     {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/health",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness/health probe. No auth required if marked Public.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "description": "User CRUD. List requires AdminAuthGuard (+ Public decorator on that route). Get/Patch/Delete use normal user JWT unless your guards differ.",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/users?page=1&limit=20",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Admin-guarded list. Prefer GET /admin/users for admin panel.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/users/{{user_id}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Fetch a single user by id."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/users/{{user_id}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Name\",\n    \"email\": \"updated@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Body: optional name, email (UpdateUserDto)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/users/{{user_id}}",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Deletes the user by id."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "description": "Authenticated file upload (images only, max 5MB).",
+      "item": [
+        {
+          "name": "Upload File",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "description": "png | jpeg | jpg | webp, max 5MB"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{url}}/files/upload",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "files",
+                "upload"
+              ]
+            },
+            "description": "Multipart upload field name: file. Accepts .(png|jpeg|jpg|webp), max 5MB. Stored under ./uploads."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Extra",
       "item": [
         {
@@ -1993,7 +2274,7 @@
   "variable": [
     {
       "key": "url",
-      "value": "http://localhost:8083/api/v1"
+      "value": "http://localhost:8010/api/v1"
     },
     {
       "key": "access_token",
@@ -2021,6 +2302,14 @@
     },
     {
       "key": "magic_link_token",
+      "value": ""
+    },
+    {
+      "key": "image_generation_id",
+      "value": ""
+    },
+    {
+      "key": "user_id",
       "value": ""
     }
   ]

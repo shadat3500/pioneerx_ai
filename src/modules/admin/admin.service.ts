@@ -1,4 +1,9 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -13,6 +18,12 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { AiProviderService } from '../ai-provider/ai-provider.service';
 import { TokenService } from '../token/token.service';
 import { NotificationService } from '../notification/notification.service';
+import { SitePageService } from '../site-page/site-page.service';
+import { UpdateSitePageDto } from '../site-page/dto/update-site-page.dto';
+import {
+  CreateStripePriceDto,
+  UpdateStripePriceDto,
+} from './dto/stripe-price.dto';
 
 @Injectable()
 export class AdminService {
@@ -23,6 +34,7 @@ export class AdminService {
     private readonly aiProvider: AiProviderService,
     private readonly tokenService: TokenService,
     private readonly notificationService: NotificationService,
+    private readonly sitePageService: SitePageService,
   ) { }
 
   async login(dto: AdminLoginDto) {
@@ -262,8 +274,160 @@ export class AdminService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        totalPages: Math.ceil(total / limit) || 0,
       },
+    };
+  }
+
+  async getDashboardStats() {
+    const raw = await this.repository.findDashboardStats();
+    const monthLabels: string[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      monthLabels.push(
+        d.toLocaleString('en-US', { month: 'short', year: '2-digit' }),
+      );
+    }
+
+    const growthMap = new Map<string, number>();
+    const costMap = new Map<string, number>();
+    monthLabels.forEach((m) => {
+      growthMap.set(m, 0);
+      costMap.set(m, 0);
+    });
+
+    for (const u of raw.usersForGrowth) {
+      const key = new Date(u.createdAt).toLocaleString('en-US', {
+        month: 'short',
+        year: '2-digit',
+      });
+      if (growthMap.has(key)) {
+        growthMap.set(key, (growthMap.get(key) || 0) + 1);
+      }
+    }
+
+    // cumulative signups over the window
+    let running = 0;
+    const userGrowth = monthLabels.map((month) => {
+      running += growthMap.get(month) || 0;
+      return { month, users: running };
+    });
+
+    for (const row of raw.tokenByMonthRaw) {
+      const key = new Date(row.date).toLocaleString('en-US', {
+        month: 'short',
+        year: '2-digit',
+      });
+      if (costMap.has(key)) {
+        costMap.set(key, (costMap.get(key) || 0) + row.estimatedCostUsd);
+      }
+    }
+
+    const aiCostByMonth = monthLabels.map((month) => ({
+      month,
+      cost: parseFloat((costMap.get(month) || 0).toFixed(4)),
+    }));
+
+    const tierCounts: Record<string, number> = {
+      FREE: raw.freeSubscribed + raw.usersWithoutSub,
+    };
+    for (const g of raw.tierGroups) {
+      if (g.tier === 'FREE') {
+        tierCounts.FREE = g._count.tier + raw.usersWithoutSub;
+      } else {
+        tierCounts[g.tier] = g._count.tier;
+      }
+    }
+
+    return {
+      totals: {
+        totalUsers: raw.totalUsers,
+        trialUsers: raw.trialUsers,
+        paidUsers: raw.paidUsers,
+        freeUsers: tierCounts.FREE || 0,
+        aiCostTodayUsd: parseFloat(
+          (raw.tokenCostToday._sum.estimatedCostUsd || 0).toFixed(6),
+        ),
+        aiCostMonthUsd: parseFloat(
+          (raw.tokenCostMonth._sum.estimatedCostUsd || 0).toFixed(6),
+        ),
+        aiCostAllTimeUsd: parseFloat(
+          (raw.tokenCostAll._sum.estimatedCostUsd || 0).toFixed(6),
+        ),
+        totalInputTokens: raw.tokenCostAll._sum.inputTokens || 0,
+        totalOutputTokens: raw.tokenCostAll._sum.outputTokens || 0,
+      },
+      userGrowth,
+      aiCostByMonth,
+      tierCounts,
+      recentUsers: raw.recentUsers.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        tier: u.subscription?.tier || 'FREE',
+        createdAt: u.createdAt,
+      })),
+    };
+  }
+
+  listSitePages() {
+    return this.sitePageService.list();
+  }
+
+  updateSitePage(slug: string, dto: UpdateSitePageDto) {
+    return this.sitePageService.update(slug, dto);
+  }
+
+  // ─────────────────────────────────────────────
+  // Stripe price → tier map
+  // ─────────────────────────────────────────────
+
+  listStripePrices() {
+    return this.repository.findAllStripePrices();
+  }
+
+  async createStripePrice(dto: CreateStripePriceDto) {
+    const existing = await this.repository.findStripePriceByPriceId(dto.priceId);
+    if (existing) {
+      throw new ConflictException(`Price "${dto.priceId}" is already mapped`);
+    }
+    return this.repository.createStripePrice(dto);
+  }
+
+  async updateStripePrice(id: string, dto: UpdateStripePriceDto) {
+    await this.findStripePriceOrFail(id);
+    return this.repository.updateStripePrice(id, dto);
+  }
+
+  async deleteStripePrice(id: string) {
+    await this.findStripePriceOrFail(id);
+    await this.repository.deleteStripePrice(id);
+    return { message: 'Stripe price mapping removed' };
+  }
+
+  private async findStripePriceOrFail(id: string) {
+    const price = await this.repository.findStripePriceById(id);
+    if (!price) {
+      throw new NotFoundException('Stripe price mapping not found');
+    }
+    return price;
+  }
+
+  // ─────────────────────────────────────────────
+  // Payments (Stripe + RevenueCat)
+  // ─────────────────────────────────────────────
+
+  async listPayments(pagination: PaginationDto) {
+    const page = pagination.page ?? 1;
+    const limit = pagination.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await this.repository.findPayments(skip, limit);
+
+    return {
+      data: items,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
     };
   }
 }

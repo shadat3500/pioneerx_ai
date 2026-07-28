@@ -74,6 +74,7 @@ model User {
   notifications      Notification[]
   promoRedemptions   PromoCodeRedemption[]
   review             Review?
+  payments           PaymentRecord[]
 
   @@map("users")
 }
@@ -86,6 +87,10 @@ model BusinessProfile {
   industry     String?
   currentPhase BusinessPhase @default(IDEA)
   country      String?
+  /// Cross-section shared memory (product/audience/decisions). Not full chat history.
+  businessBrief    String?   @db.Text
+  briefUpdatedAt   DateTime?
+  briefUpdatedFrom String? // section key that last updated the brief
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
@@ -113,7 +118,63 @@ model Subscription {
   renewsAt                DateTime?
   updatedAt               DateTime         @updatedAt
 
+  /// Which billing provider owns this row: "stripe" | "revenuecat" | null
+  provider             String?
+  stripeCustomerId     String?
+  stripeSubscriptionId String? @unique
+  stripePriceId        String?
+  cancelAtPeriodEnd    Boolean @default(false)
+
+  @@index([stripeCustomerId])
   @@map("subscriptions")
+}
+
+// ─────────────────────────────────────────────
+// Stripe billing (website checkout)
+// ─────────────────────────────────────────────
+
+/// Maps a Stripe Price to an internal tier so prices can change without a deploy.
+model StripePrice {
+  id        String           @id @default(uuid())
+  priceId   String           @unique // price_xxx from the Stripe dashboard
+  tier      SubscriptionTier
+  interval  String           @default("month") // "month" | "year"
+  label     String?
+  amount    Int? // minor units (cents), display only
+  currency  String           @default("usd")
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("stripe_prices")
+}
+
+/// Processed webhook ledger — makes retried provider events idempotent.
+model WebhookEvent {
+  id          String   @id @default(uuid())
+  provider    String // "stripe" | "revenuecat"
+  eventId     String
+  type        String
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}
+
+model PaymentRecord {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String   @default("stripe")
+  invoiceId   String?  @unique
+  amount      Int // minor units (cents)
+  currency    String   @default("usd")
+  status      String // "paid" | "failed" | "refunded"
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("payment_records")
 }
 
 model QuotaConfig {
@@ -272,6 +333,7 @@ model Message {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role           String       // "user" | "assistant"
   content        String       @db.Text
+  imageUrl       String?      @db.Text // optional generated image (URL or data URI)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
@@ -454,6 +516,23 @@ model Review {
 
   @@index([isApproved, createdAt])
   @@map("reviews")
+}
+
+// ─────────────────────────────────────────────
+// Site CMS (About / Terms / Privacy / Contact)
+// ─────────────────────────────────────────────
+
+model SitePage {
+  id        String   @id @default(uuid())
+  /// Route slug: about-us | contact-us | privacy-policy | terms-condition
+  slug      String   @unique
+  title     String
+  /// Plain text / markdown-ish body (newlines preserved on the website)
+  body      String   @db.Text
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@map("site_pages")
 }
 
 // ─────────────────────────────────────────────

@@ -26,6 +26,11 @@ import { PromoService } from '../promo/promo.service';
 import { CreatePromoCodeDto, UpdatePromoCodeDto } from '../promo/dto/promo.dto';
 import { ReviewService } from '../review/review.service';
 import { AdminCreateReviewDto } from '../review/dto/submit-review.dto';
+import { UpdateSitePageDto } from '../site-page/dto/update-site-page.dto';
+import {
+  CreateStripePriceDto,
+  UpdateStripePriceDto,
+} from './dto/stripe-price.dto';
 
 @ApiTags('Admin')
 @Controller('admin')
@@ -179,6 +184,15 @@ export class AdminController {
     return this.adminService.getUsers(pagination);
   }
 
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('dashboard-stats')
+  @ApiOperation({ summary: 'Aggregated dashboard stats (users, growth, AI cost)' })
+  getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
+
   // ─────────────────────────────────────────────
   // v1.5 §10a — Credit Config Manager
   // ─────────────────────────────────────────────
@@ -304,5 +318,80 @@ export class AdminController {
   @ApiOperation({ summary: 'Hard delete a review' })
   deleteReview(@Param('id') id: string) {
     return this.reviewService.remove(id);
+  }
+
+  // ─────────────────────────────────────────────
+  // Site CMS — About / Terms / Privacy / Contact
+  // ─────────────────────────────────────────────
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('site-pages')
+  @ApiOperation({ summary: 'List editable site pages' })
+  listSitePages() {
+    return this.adminService.listSitePages();
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Patch('site-pages/:slug')
+  @ApiOperation({ summary: 'Update a site page by slug' })
+  updateSitePage(@Param('slug') slug: string, @Body() body: UpdateSitePageDto) {
+    return this.adminService.updateSitePage(slug, body);
+  }
+
+  // ─────────────────────────────────────────────
+  // Stripe billing — price → tier map & payments
+  // ─────────────────────────────────────────────
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('stripe-prices')
+  @ApiOperation({ summary: 'List Stripe price → tier mappings' })
+  listStripePrices() {
+    return this.adminService.listStripePrices();
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Post('stripe-prices')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Map a Stripe price id to a subscription tier' })
+  createStripePrice(@Body() body: CreateStripePriceDto) {
+    return this.adminService.createStripePrice(body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Patch('stripe-prices/:id')
+  @ApiOperation({ summary: 'Update a Stripe price mapping' })
+  updateStripePrice(
+    @Param('id') id: string,
+    @Body() body: UpdateStripePriceDto,
+  ) {
+    return this.adminService.updateStripePrice(id, body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Delete('stripe-prices/:id')
+  @ApiOperation({ summary: 'Remove a Stripe price mapping' })
+  deleteStripePrice(@Param('id') id: string) {
+    return this.adminService.deleteStripePrice(id);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Get('payments')
+  @ApiOperation({ summary: 'Paginated payment history across providers' })
+  listPayments(@Query() query: PaginationDto) {
+    return this.adminService.listPayments(query);
   }
 }
