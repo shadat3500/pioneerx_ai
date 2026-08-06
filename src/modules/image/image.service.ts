@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ModelRole, SubscriptionTier } from '@prisma/client';
+import { ModelRole } from '@prisma/client';
 import { OpenAI } from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreditService } from '../credit/credit.service';
@@ -28,7 +28,6 @@ export class ImageService {
   ) {}
 
   async generate(userId: string, dto: GenerateImageDto) {
-    // 1. Daily image limit
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: { subscription: true },
@@ -37,10 +36,13 @@ export class ImageService {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     }
 
-    const tier = user.subscription?.tier ?? SubscriptionTier.FREE;
-    const quota = await this.prisma.quotaConfig.findUnique({ where: { tier } });
-    const dailyImageLimit = quota?.dailyImageLimit ?? null;
+    const tier = user.subscription?.tier ?? 'FREE';
+    const creditConfig = await this.prisma.creditConfig.findUnique({
+      where: { tier: tier as any },
+    });
+    const dailyImageLimit = creditConfig?.dailyImageLimit ?? null;
 
+    // Daily image cap (from CreditConfig) — empty/null = unlimited
     if (dailyImageLimit !== null) {
       const startOfDay = new Date();
       startOfDay.setHours(0, 0, 0, 0);
@@ -53,14 +55,16 @@ export class ImageService {
         throw new HttpException(
           {
             dailyLimitReached: true,
-            message: "You've reached your daily image limit. Upgrade for more.",
+            limit: dailyImageLimit,
+            used: todayCount,
+            message: `You've reached your daily image limit (${dailyImageLimit}). Upgrade or try again tomorrow.`,
           },
           HttpStatus.FORBIDDEN,
         );
       }
     }
 
-    // 2. Credit balance
+    // Credit balance (40 credits per image)
     const creditCheck = await this.creditService.checkBalance(
       userId,
       CREDIT_COST_IMAGE_GENERATION,
@@ -76,7 +80,7 @@ export class ImageService {
       );
     }
 
-    // 3. Reserve credits
+    // Reserve credits
     const reservation = await this.creditService.reserve(
       userId,
       CREDIT_COST_IMAGE_GENERATION,

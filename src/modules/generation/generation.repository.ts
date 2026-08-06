@@ -14,7 +14,6 @@ export class GenerationRepository extends BaseRepository<Generation> {
       where: { id, userId },
       include: {
         actionSteps: { orderBy: { order: 'asc' } },
-        // v1.5 §7c — include the linked conversation with its messages
         conversation: {
           include: {
             messages: { orderBy: { createdAt: 'asc' } },
@@ -39,7 +38,7 @@ export class GenerationRepository extends BaseRepository<Generation> {
   ) {
     return this.prisma.savedOutput.upsert({
       where: { generationId },
-      update: { label, businessProfileId },
+      update: { label, businessProfileId, savedAt: new Date() },
       create: {
         userId,
         businessProfileId,
@@ -55,6 +54,71 @@ export class GenerationRepository extends BaseRepository<Generation> {
     });
   }
 
+  async findSavedOutputById(id: string) {
+    return this.prisma.savedOutput.findUnique({ where: { id } });
+  }
+
+  async repointSavedOutput(
+    savedOutputId: string,
+    newGenerationId: string,
+    businessProfileId: string,
+    label: string,
+  ) {
+    return this.prisma.savedOutput.update({
+      where: { id: savedOutputId },
+      data: {
+        generationId: newGenerationId,
+        businessProfileId,
+        label,
+        savedAt: new Date(),
+      },
+    });
+  }
+
+  async updateSavedOutputMeta(savedOutputId: string, label: string) {
+    return this.prisma.savedOutput.update({
+      where: { id: savedOutputId },
+      data: { label, savedAt: new Date() },
+    });
+  }
+
+  async findActivePointer(userId: string, businessProfileId: string, sectionId: string) {
+    return this.prisma.activeConversation.findUnique({
+      where: {
+        userId_businessProfileId_sectionId: {
+          userId,
+          businessProfileId,
+          sectionId,
+        },
+      },
+    });
+  }
+
+  async setActiveSavedOutputId(
+    userId: string,
+    businessProfileId: string,
+    sectionId: string,
+    savedOutputId: string | null,
+  ) {
+    return this.prisma.activeConversation.update({
+      where: {
+        userId_businessProfileId_sectionId: {
+          userId,
+          businessProfileId,
+          sectionId,
+        },
+      },
+      data: { savedOutputId },
+    });
+  }
+
+  async clearActiveSavedOutputReferences(savedOutputId: string) {
+    return this.prisma.activeConversation.updateMany({
+      where: { savedOutputId },
+      data: { savedOutputId: null },
+    });
+  }
+
   async deleteSavedOutput(generationId: string) {
     return this.prisma.savedOutput.delete({
       where: { generationId },
@@ -66,7 +130,6 @@ export class GenerationRepository extends BaseRepository<Generation> {
       where: {
         userId,
         businessProfileId,
-        // v1.5 §7b — filter by the current section when provided
         ...(sectionId && { generation: { sectionId } }),
       },
       include: {
