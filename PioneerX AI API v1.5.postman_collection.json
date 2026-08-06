@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "7a91cd3e-5b12-4f88-a3d1-90c4e51b72aa",
     "name": "PioneerX AI API v1.5",
-    "description": "PioneerX AI API Collection — Backend v1.5 (synced with current Nest controllers).\n\nChanges from v1.4:\n- Credit system (GET /credit-status, credits reserved/confirmed per AI call)\n- Image generation (POST /image/generate — logo / business_card via Gemini; optional sectionKey to append to chat)\n- GET /image/generations/:id — fetch stored image for chat history\n- Notifications (list unread, mark read, mark all read)\n- Promo codes (POST /auth/apply-promo, optional promoCode at register/magic-link)\n- Reviews (public GET /reviews, authenticated POST /reviews, admin moderation)\n- Send Message auto-generates action steps + links (generationId, action_steps, suggested_links, creditStatus)\n- GET /saved-outputs supports optional ?sectionKey=\n- GET /sections returns ALL sections with isLocked\n- Shared Business Brief (businessBrief on BusinessProfile) — updated server-side after chat; no dedicated public endpoint\n- Admin: credit configs, broadcast notifications, promo CRUD, review moderation\n- Also included: files upload, users CRUD, health, Apple OAuth stubs, Google callback note\n\nDefault {{url}}: http://localhost:8010/api/v1",
+    "description": "PioneerX AI API Collection — Backend v1.5+ (synced with Nest controllers + Admin Panel).\n\nRecent updates (pricing / credits / admin):\n- GET /billing/plans — public website pricing table (amount + compareAtAmount crossed-out price)\n- Billing checkout/portal/payments + Stripe webhook\n- Admin Stripe price map CRUD (/admin/stripe-prices) with compareAtAmount\n- Admin credit configs now include dailyImageLimit (images/day; quotas retired)\n- Admin quota-configs endpoints DISABLED (use Credits + dailyImageLimit instead)\n- Public GET /promo-codes for website promo list\n- Admin site-pages + public GET /site-pages\n- Admin dashboard-stats + payments list\n- Image generate: dailyImageLimit read from CreditConfig (not QuotaConfig)\n\nDefault {{url}}: http://localhost:8010/api/v1\n\n§18 Chat sessions: POST /conversations/session/reset after login; POST /saved-outputs/:id/open to restore; Save updates same item when continuing.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "53975265"
   },
@@ -188,6 +188,218 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Public (Website)",
+      "item": [
+        {
+          "name": "List Active Promo Codes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/promo-codes",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "promo-codes"
+              ]
+            },
+            "description": "Public list of active, non-expired promo codes for the website footer/promo page.\n\nReturns: [{ code, trialDays, expiresAt }]"
+          },
+          "response": []
+        },
+        {
+          "name": "List Site Pages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/site-pages",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "site-pages"
+              ]
+            },
+            "description": "Public list of CMS site pages (about, contact, privacy, terms)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Site Page by Slug",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/site-pages/:slug",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "site-pages",
+                ":slug"
+              ],
+              "variable": [
+                {
+                  "key": "slug",
+                  "value": "about-us"
+                }
+              ]
+            },
+            "description": "Public CMS page by slug. Example slug: about-us | contact-us | privacy-policy | terms-condition"
+          },
+          "response": []
+        }
+      ],
+      "description": "Unauthenticated endpoints used by the marketing website."
+    },
+    {
+      "name": "Billing (Stripe)",
+      "item": [
+        {
+          "name": "List Plans (Public Pricing Table)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/billing/plans",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "billing",
+                "plans"
+              ]
+            },
+            "description": "PUBLIC — used by the website pricing section.\n\nReturns active StripePrice rows:\n{\n  priceId, tier, interval, label,\n  amount,           // sale price in cents (e.g. 2999 = $29.99)\n  compareAtAmount,  // crossed-out / “was” price in cents (nullable)\n  currency\n}\n\nWebsite shows amount as the main price and compareAtAmount with line-through when set."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Checkout Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/billing/checkout-session",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "billing",
+                "checkout-session"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tier\": \"PRO\",\n    \"interval\": \"month\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Auth required (user JWT).\n\nBody (provide priceId OR tier+interval):\n{\n  \"priceId\": \"price_xxx\",   // optional — takes precedence\n  \"tier\": \"PRO\",            // PRO | PRO_PLUS | ELITE\n  \"interval\": \"month\"       // month | year\n}\n\nReturns: { url, sessionId, tier, interval } — redirect browser to url."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Portal Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/billing/portal-session",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "billing",
+                "portal-session"
+              ]
+            },
+            "description": "Auth required. Opens Stripe Customer Portal for the logged-in user. Returns { url }."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Checkout Session Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/billing/checkout-session/:id",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "billing",
+                "checkout-session",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "cs_test_xxx"
+                }
+              ]
+            },
+            "description": "Auth required. Poll after returning from Stripe Checkout success page."
+          },
+          "response": []
+        },
+        {
+          "name": "List My Payments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/billing/payments",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "billing",
+                "payments"
+              ]
+            },
+            "description": "Auth required. Payment history for the current user."
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe Webhook (Simulate)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/webhooks/stripe",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "webhooks",
+                "stripe"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"type\": \"invoice.paid\",\n    \"data\": {\n        \"object\": {}\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Stripe → server webhook. Requires stripe-signature header in production. Do not call manually unless testing with Stripe CLI."
+          },
+          "response": []
+        }
+      ],
+      "description": "Website checkout + subscription billing via Stripe. Plans power the “Start free, scale when ready” pricing section."
     },
     {
       "name": "Business Profile",
@@ -435,6 +647,26 @@
       "name": "Conversations",
       "item": [
         {
+          "name": "Reset Session (after login)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/conversations/session/reset",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "conversations",
+                "session",
+                "reset"
+              ]
+            },
+            "description": "Clears ActiveConversation pointers for the user. Does NOT delete conversations or saved outputs. Call after successful login."
+          },
+          "response": []
+        },
+        {
           "name": "Get Conversation",
           "request": {
             "method": "GET",
@@ -449,7 +681,7 @@
                 "{{section_key}}"
               ]
             },
-            "description": "Finds conversation for { userId, activeProfileId, section }. Creates one if missing.\nReturns conversation + all messages ordered by createdAt ASC."
+            "description": "Finds conversation for { userId, activeProfileId, section }. Creates one if missing.\nReturns conversation + all messages ordered by createdAt ASC.\n\nv1.5 §18: Returns the *active* conversation only. If none active, creates an empty thread (does not reload old unsaved history)."
           },
           "response": []
         },
@@ -532,9 +764,35 @@
             "description": "Manual re-generate. Uses last 10 conversation messages.\nNo body required.\n\nv1.5: Consumes credits (402 if insufficient). Response also includes creditStatus.\n\nReturns: { generationId, action_steps[4], suggested_links[4], tokenStatus, creditStatus }\n\nAuto-saves generation_id to collection variable for Save Output."
           },
           "response": []
+        },
+        {
+          "name": "Start Fresh Conversation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/conversations/:sectionKey/new",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "conversations",
+                ":sectionKey",
+                "new"
+              ],
+              "variable": [
+                {
+                  "key": "sectionKey",
+                  "value": "idea_validation"
+                }
+              ]
+            },
+            "description": "Create a new empty thread for this section; clears savedOutputId on the active pointer."
+          },
+          "response": []
         }
       ],
-      "description": "Section-scoped chatbot. v1.5: every message auto-generates action steps + suggested links and consumes credits."
+      "description": "v1.5 §18 — active session pointer. Re-login → POST session/reset → GET returns fresh empty chat. Saved outputs restore via POST /saved-outputs/:id/open."
     },
     {
       "name": "Credits",
@@ -587,7 +845,7 @@
                 "generate"
               ]
             },
-            "description": "Generates a logo or business card image (Gemini).\n\nBody:\n- prompt: string (max 2000)\n- type: \"logo\" | \"business_card\"\n- sectionKey?: string — if set, also appends user + assistant messages to that section chat\n\nChecks dailyImageLimit + credit balance (40). Reserve → generate → confirm (refund on failure).\n\nReturns: { imageUrl (data URL / url), creditStatus, … }\nWhen sectionKey is set, chat history stores image-generation:{id}; use GET /image/generations/:id to reload full image.\n\nErrors: 403 daily image limit, 402 insufficient credits."
+            "description": "Generates a logo or business card image.\n\nBody:\n- prompt: string (max 2000)\n- type: \"logo\" | \"business_card\"\n- sectionKey?: string — if set, also appends user + assistant messages to that section chat\n\nChecks (in order):\n1) CreditConfig.dailyImageLimit for the user's tier (null = unlimited) — 403 if exceeded\n2) Credit balance (40 credits per image) — 402 if insufficient\nThen: reserve → generate → confirm (refund on failure)\n\nReturns: { imageUrl, creditStatus, … }\nWhen sectionKey is set, chat history stores image-generation:{id}; use GET /image/generations/:id to reload full image."
           },
           "response": [],
           "event": [
@@ -825,7 +1083,8 @@
                   "value": "{{generation_id}}"
                 }
               ]
-            }
+            },
+            "description": "\n\nv1.5 §18: If the active session was opened from a saved output, this updates that SavedOutput (repoints generationId) instead of creating a duplicate."
           },
           "response": []
         },
@@ -877,6 +1136,32 @@
               ]
             },
             "description": "Filtered by current user + active business profile.\n\nv1.5: Supports optional ?sectionKey= query param to filter by section (enable the query param to use it)."
+          },
+          "response": []
+        },
+        {
+          "name": "Open Saved Output in Chat",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/saved-outputs/:id/open",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "saved-outputs",
+                ":id",
+                "open"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "saved-output-uuid"
+                }
+              ]
+            },
+            "description": "Sets ActiveConversation to this save’s conversation. Next POST /generations/:id/save updates this SavedOutput instead of creating a new one."
           },
           "response": []
         }
@@ -1250,7 +1535,7 @@
           "name": "Quota Configs",
           "item": [
             {
-              "name": "List Quotas",
+              "name": "⛔ List Quotas (retired)",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -1264,12 +1549,12 @@
                     "quota-configs"
                   ]
                 },
-                "description": "v1.5: Each quota now includes dailyImageLimit."
+                "description": "v1.5: Each quota now includes dailyImageLimit.\n\n⚠️ DISABLED on backend. Prefer PATCH /admin/credit-configs/:id with dailyImageLimit."
               },
               "response": []
             },
             {
-              "name": "Update Quota",
+              "name": "⛔ Update Quota (retired)",
               "request": {
                 "method": "PATCH",
                 "header": [],
@@ -1299,11 +1584,12 @@
                     }
                   ]
                 },
-                "description": "v1.5: New optional field dailyImageLimit (images per day for the tier)."
+                "description": "v1.5: New optional field dailyImageLimit (images per day for the tier).\n\n⚠️ DISABLED on backend. Prefer PATCH /admin/credit-configs/:id with dailyImageLimit."
               },
               "response": []
             }
-          ]
+          ],
+          "description": "RETIRED — endpoints commented out on the server. Use Admin → Credit Configs (dailyImageLimit) instead. Kept in collection for reference only."
         },
         {
           "name": "Model Pricings",
@@ -1432,7 +1718,7 @@
                     "credit-configs"
                   ]
                 },
-                "description": "NEW in v1.5. Lists credit configs per tier: { tier, monthlyCredits, dailyCredits, trialCredits }."
+                "description": "Lists credit configs per tier:\n{ id, tier, monthlyCredits, dailyCredits, trialCredits, dailyImageLimit }"
               },
               "response": []
             },
@@ -1443,7 +1729,7 @@
                 "header": [],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n    \"monthlyCredits\": 15000,\n    \"dailyCredits\": 500,\n    \"trialCredits\": 2000\n}",
+                  "raw": "{\n    \"monthlyCredits\": 15000,\n    \"dailyCredits\": 500,\n    \"trialCredits\": 2000,\n    \"dailyImageLimit\": 10\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1467,12 +1753,12 @@
                     }
                   ]
                 },
-                "description": "NEW in v1.5. All fields optional; send null to disable a field for the tier."
+                "description": "All fields optional; send null to clear.\n\nFields:\n- monthlyCredits — paid tiers (reset on billing cycle)\n- dailyCredits — Free daily allowance\n- trialCredits — daily while on trial (FREE row)\n- dailyImageLimit — max images/day (null = unlimited; still costs 40 credits each). Applies immediately."
               },
               "response": []
             }
           ],
-          "description": "NEW in v1.5 — per-tier credit allowances."
+          "description": "Per-tier credit budgets + daily image limit. Quotas page retired — image caps live here."
         },
         {
           "name": "Notifications",
@@ -1837,6 +2123,234 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Stripe Prices (Website Pricing)",
+          "item": [
+            {
+              "name": "List Stripe Prices",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/stripe-prices",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "stripe-prices"
+                  ]
+                },
+                "description": "Admin auth. Full price map including inactive rows."
+              },
+              "response": []
+            },
+            {
+              "name": "Create Stripe Price",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/stripe-prices",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "stripe-prices"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"priceId\": \"price_1QxyzAbCdEfGhIjK\",\n    \"tier\": \"PRO\",\n    \"interval\": \"month\",\n    \"label\": \"Pro monthly\",\n    \"amount\": 2999,\n    \"compareAtAmount\": 3499,\n    \"currency\": \"usd\",\n    \"isActive\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Admin auth.\n\nBody:\n{\n  \"priceId\": \"price_…\",          // from Stripe Dashboard (required)\n  \"tier\": \"PRO\",                 // PRO | PRO_PLUS | ELITE\n  \"interval\": \"month\",           // month | year\n  \"label\": \"Pro monthly\",\n  \"amount\": 2999,                // sale price cents → website main price\n  \"compareAtAmount\": 3499,       // crossed-out “was” price cents (optional)\n  \"currency\": \"usd\",\n  \"isActive\": true\n}\n\nWebsite “Start free, scale when ready” uses amount + compareAtAmount from GET /billing/plans."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Stripe Price",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/stripe-prices/:id",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "stripe-prices",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "stripe-price-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"amount\": 2999,\n    \"compareAtAmount\": 3499,\n    \"isActive\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Admin auth. Partial update.\n\nCommon: update display prices only:\n{ \"amount\": 2999, \"compareAtAmount\": 3499 }\n\nClear crossed-out price: { \"compareAtAmount\": null }\n\nNote: Changing amount/compareAtAmount updates website display only. Stripe still charges the linked priceId."
+              },
+              "response": []
+            },
+            {
+              "name": "Delete Stripe Price",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/stripe-prices/:id",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "stripe-prices",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "stripe-price-uuid"
+                    }
+                  ]
+                },
+                "description": "Admin auth. Removes the price→tier mapping."
+              },
+              "response": []
+            }
+          ],
+          "description": "Maps Stripe price_… IDs to tiers. amount + compareAtAmount drive website pricing cards."
+        },
+        {
+          "name": "Payments",
+          "item": [
+            {
+              "name": "List Payments",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/payments?page=1&limit=20",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "payments"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Admin auth. Paginated payment records (not demo data)."
+              },
+              "response": []
+            }
+          ],
+          "description": "Payment ledger from Stripe/RevenueCat webhooks."
+        },
+        {
+          "name": "Get Dashboard Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/admin/dashboard-stats",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "admin",
+                "dashboard-stats"
+              ]
+            },
+            "description": "Admin auth. Aggregated stats for the Admin Panel dashboard (users, AI cost, growth charts)."
+          },
+          "response": []
+        },
+        {
+          "name": "Site Pages",
+          "item": [
+            {
+              "name": "List Site Pages",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/site-pages",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "site-pages"
+                  ]
+                },
+                "description": "Admin auth. All CMS pages."
+              },
+              "response": []
+            },
+            {
+              "name": "Update Site Page",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/site-pages/:slug",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "site-pages",
+                    ":slug"
+                  ],
+                  "variable": [
+                    {
+                      "key": "slug",
+                      "value": "about-us"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"title\": \"About Us\",\n    \"body\": \"Updated page content…\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "description": "Admin auth. Slug examples: about-us, contact-us, privacy-policy, terms-condition"
+              },
+              "response": []
+            }
+          ],
+          "description": "CMS for About / Contact / Privacy / Terms."
         }
       ],
       "auth": {

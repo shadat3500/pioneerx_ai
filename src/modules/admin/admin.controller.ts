@@ -15,7 +15,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { CreateModelPricingDto, UpdateModelPricingDto } from './dto/model-pricing.dto';
-import { UpdateQuotaConfigDto } from './dto/quota-config.dto';
+// import { UpdateQuotaConfigDto } from './dto/quota-config.dto'; // quotas retired
 import { UpdateCreditConfigDto } from './dto/credit-config.dto';
 import { BroadcastNotificationDto } from './dto/broadcast-notification.dto';
 import { TokenDashboardQueryDto } from './dto/token-dashboard-query.dto';
@@ -112,23 +112,24 @@ export class AdminController {
     return this.adminService.updatePromptTemplate(id, body);
   }
 
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Get('quota-configs')
-  @ApiOperation({ summary: 'Get all quota configs' })
-  getQuotaConfigs() {
-    return this.adminService.getQuotaConfigs();
-  }
+  // Quotas retired — credits are the only usage gate. Endpoints kept commented for rollback.
+  // @ApiBearerAuth()
+  // @UseGuards(AdminAuthGuard)
+  // @Public()
+  // @Get('quota-configs')
+  // @ApiOperation({ summary: 'Get all quota configs' })
+  // getQuotaConfigs() {
+  //   return this.adminService.getQuotaConfigs();
+  // }
 
-  @ApiBearerAuth()
-  @UseGuards(AdminAuthGuard)
-  @Public()
-  @Patch('quota-configs/:id')
-  @ApiOperation({ summary: 'Update a quota config (dailyTokenLimit, dailyRegenerateLimit)' })
-  updateQuotaConfig(@Param('id') id: string, @Body() body: UpdateQuotaConfigDto) {
-    return this.adminService.updateQuotaConfig(id, body);
-  }
+  // @ApiBearerAuth()
+  // @UseGuards(AdminAuthGuard)
+  // @Public()
+  // @Patch('quota-configs/:id')
+  // @ApiOperation({ summary: 'Update a quota config (dailyTokenLimit, dailyRegenerateLimit)' })
+  // updateQuotaConfig(@Param('id') id: string, @Body() body: UpdateQuotaConfigDto) {
+  //   return this.adminService.updateQuotaConfig(id, body);
+  // }
 
   @ApiBearerAuth()
   @UseGuards(AdminAuthGuard)
@@ -259,6 +260,16 @@ export class AdminController {
   @ApiOperation({ summary: 'Update a promo code (toggle active, limits, expiry)' })
   updatePromoCode(@Param('id') id: string, @Body() body: UpdatePromoCodeDto) {
     return this.promoService.updatePromoCode(id, body);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(AdminAuthGuard)
+  @Public()
+  @Delete('promo-codes/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a promo code' })
+  deletePromoCode(@Param('id') id: string) {
+    return this.promoService.deletePromoCode(id);
   }
 
   // ─────────────────────────────────────────────
