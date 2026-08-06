@@ -1,0 +1,15 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "initial-backend-setup",
+    "main"
+  ],
+  "parent": {
+    "initial-backend-setup": "main",
+    "main": null
+  },
+  "order": [
+    "main",
+    "initial-backend-setup"
+  ]
+}
