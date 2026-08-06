@@ -19,7 +19,10 @@ export class GenerationController {
 
   @Post('generations/:id/save')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Save generation advisory output' })
+  @ApiOperation({
+    summary:
+      'Save generation output (updates existing SavedOutput when continuing a restored save)',
+  })
   saveOutput(
     @GetCurrentUser('sub') userId: string,
     @Param('id') id: string,
@@ -43,5 +46,18 @@ export class GenerationController {
     @Query('sectionKey') sectionKey?: string,
   ) {
     return this.generationService.getSavedOutputs(userId, sectionKey);
+  }
+
+  @Post('saved-outputs/:id/open')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Open a saved output into the active section chat (replace thread; next Save updates this item)',
+  })
+  openSavedOutput(
+    @GetCurrentUser('sub') userId: string,
+    @Param('id') id: string,
+  ) {
+    return this.generationService.openSavedOutput(userId, id);
   }
 }

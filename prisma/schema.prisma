@@ -61,20 +61,21 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  businessProfiles   BusinessProfile[]
-  conversations      Conversation[]
-  generations        Generation[]
-  savedOutputs       SavedOutput[]
-  dailyTasks         DailyTask[]
-  subscription       Subscription?
-  tokenUsage         TokenUsage[]
-  creditBalance      CreditBalance?
-  creditTransactions CreditTransaction[]
-  imageGenerations   ImageGeneration[]
-  notifications      Notification[]
-  promoRedemptions   PromoCodeRedemption[]
-  review             Review?
-  payments           PaymentRecord[]
+  businessProfiles     BusinessProfile[]
+  conversations        Conversation[]
+  activeConversations  ActiveConversation[]
+  generations          Generation[]
+  savedOutputs         SavedOutput[]
+  dailyTasks           DailyTask[]
+  subscription         Subscription?
+  tokenUsage           TokenUsage[]
+  creditBalance        CreditBalance?
+  creditTransactions   CreditTransaction[]
+  imageGenerations     ImageGeneration[]
+  notifications        Notification[]
+  promoRedemptions     PromoCodeRedemption[]
+  review               Review?
+  payments             PaymentRecord[]
 
   @@map("users")
 }
@@ -94,11 +95,12 @@ model BusinessProfile {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  conversations    Conversation[]
-  generations      Generation[]
-  savedOutputs     SavedOutput[]
-  dailyTasks       DailyTask[]
-  imageGenerations ImageGeneration[]
+  conversations       Conversation[]
+  activeConversations ActiveConversation[]
+  generations         Generation[]
+  savedOutputs        SavedOutput[]
+  dailyTasks          DailyTask[]
+  imageGenerations    ImageGeneration[]
 
   @@index([userId])
   @@map("business_profiles")
@@ -135,16 +137,17 @@ model Subscription {
 
 /// Maps a Stripe Price to an internal tier so prices can change without a deploy.
 model StripePrice {
-  id        String           @id @default(uuid())
-  priceId   String           @unique // price_xxx from the Stripe dashboard
-  tier      SubscriptionTier
-  interval  String           @default("month") // "month" | "year"
-  label     String?
-  amount    Int? // minor units (cents), display only
-  currency  String           @default("usd")
-  isActive  Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  priceId         String           @unique // price_xxx from the Stripe dashboard
+  tier            SubscriptionTier
+  interval        String           @default("month") // "month" | "year"
+  label           String?
+  amount          Int? // minor units (cents), display only — current/sale price
+  compareAtAmount Int? // minor units (cents) — crossed-out / was price on website
+  currency        String           @default("usd")
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("stripe_prices")
 }
@@ -219,12 +222,13 @@ model CreditTransaction {
 }
 
 model CreditConfig {
-  id             String           @id @default(uuid())
-  tier           SubscriptionTier @unique
-  monthlyCredits Int? // null = daily reset applies instead
-  dailyCredits   Int? // used for Free and Trial
-  trialCredits   Int? // daily credits during trial period
-  updatedAt      DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  tier            SubscriptionTier @unique
+  monthlyCredits  Int? // null = daily reset applies instead
+  dailyCredits    Int? // used for Free and Trial
+  trialCredits    Int? // daily credits during trial period
+  dailyImageLimit Int? // null = unlimited images/day (still costs credits)
+  updatedAt       DateTime         @updatedAt
 
   @@map("credit_configs")
 }
@@ -270,10 +274,11 @@ model Section {
   requiredTier    SubscriptionTier @default(FREE)
   isActive        Boolean          @default(true)
 
-  promptTemplates PromptTemplate[]
-  suggestedLinks  SuggestedLink[]
-  generations     Generation[]
-  conversations   Conversation[]
+  promptTemplates     PromptTemplate[]
+  suggestedLinks      SuggestedLink[]
+  generations         Generation[]
+  conversations       Conversation[]
+  activeConversations ActiveConversation[]
 
   @@map("sections")
 }
@@ -320,11 +325,33 @@ model Conversation {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  messages    Message[]
-  generations Generation[]
+  messages            Message[]
+  generations         Generation[]
+  activeConversations ActiveConversation[]
+
+  // v1.5 §18 — multiple threads per section (fresh session + one thread per restored save)
+  @@index([userId, businessProfileId, sectionId])
+  @@map("conversations")
+}
+
+/// Pointer to the conversation currently shown in the section chat UI.
+model ActiveConversation {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  sectionId         String
+  section           Section         @relation(fields: [sectionId], references: [id])
+  conversationId    String
+  conversation      Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// When set, the next Save updates this SavedOutput instead of creating a new one
+  savedOutputId     String?
+  savedOutput       SavedOutput?    @relation(fields: [savedOutputId], references: [id], onDelete: SetNull)
+  updatedAt         DateTime        @updatedAt
 
   @@unique([userId, businessProfileId, sectionId])
-  @@map("conversations")
+  @@map("active_conversations")
 }
 
 model Message {
@@ -390,6 +417,8 @@ model SavedOutput {
   generation        Generation      @relation(fields: [generationId], references: [id])
   label             String?
   savedAt           DateTime        @default(now())
+
+  activeConversations ActiveConversation[]
 
   @@index([businessProfileId])
   @@map("saved_outputs")

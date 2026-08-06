@@ -63,16 +63,17 @@ async function main() {
     monthlyCredits: number | null;
     dailyCredits: number | null;
     trialCredits: number | null;
+    dailyImageLimit: number | null;
   }[] = [
-    { tier: 'FREE',     monthlyCredits: null,  dailyCredits: 500,  trialCredits: 2000 },
-    { tier: 'PRO',      monthlyCredits: 15000, dailyCredits: null, trialCredits: null },
-    { tier: 'PRO_PLUS', monthlyCredits: 27000, dailyCredits: null, trialCredits: null },
-    { tier: 'ELITE',    monthlyCredits: 60000, dailyCredits: null, trialCredits: null },
+    { tier: 'FREE',     monthlyCredits: null,  dailyCredits: 500,  trialCredits: 2000, dailyImageLimit: 3 },
+    { tier: 'PRO',      monthlyCredits: 15000, dailyCredits: null, trialCredits: null, dailyImageLimit: 10 },
+    { tier: 'PRO_PLUS', monthlyCredits: 27000, dailyCredits: null, trialCredits: null, dailyImageLimit: 20 },
+    { tier: 'ELITE',    monthlyCredits: 60000, dailyCredits: null, trialCredits: null, dailyImageLimit: 30 },
   ];
   for (const cfg of creditConfigs) {
     await prisma.creditConfig.upsert({
       where: { tier: cfg.tier },
-      update: {},
+      update: { dailyImageLimit: cfg.dailyImageLimit },
       create: cfg,
     });
   }
@@ -93,6 +94,8 @@ async function main() {
   console.log('✅ Model pricing seeded.');
 
   // 3. Seed AiModelConfig (Default Model Roles)
+  // Keep IDs current — providers retire old names (e.g. gemini-1.5-pro, grok-2-1212).
+  // Runtime also auto-falls back + heals dead IDs in AiProviderService.
   const defaultModelConfigs = [
     {
       role: ModelRole.PROPOSER_1,
@@ -102,32 +105,32 @@ async function main() {
     {
       role: ModelRole.PROPOSER_2,
       provider: 'google',
-      modelId: 'gemini-1.5-pro',
+      modelId: 'gemini-2.5-flash',
     },
     {
       role: ModelRole.PROPOSER_3,
-      provider: 'xai',
-      modelId: 'grok-2-1212',
+      provider: 'google',
+      modelId: 'gemini-2.5-flash',
     },
     {
       role: ModelRole.AGGREGATOR,
-      provider: 'anthropic',
-      modelId: 'claude-3-5-sonnet-latest',
+      provider: 'google',
+      modelId: 'gemini-2.5-flash',
     },
     {
       role: ModelRole.DAILY_TASK_GENERATOR,
       provider: 'google',
-      modelId: 'gemini-3.5-flash',
+      modelId: 'gemini-2.5-flash',
     },
     {
       role: ModelRole.FREE_TIER_MODEL,
       provider: 'google',
-      modelId: 'gemini-3.5-flash',
+      modelId: 'gemini-2.5-flash',
     },
     {
       role: ModelRole.IMAGE_GENERATOR,
       provider: 'openai',
-      modelId: 'dall-e-3',
+      modelId: 'gpt-image-2',
     },
   ];
 
@@ -137,11 +140,13 @@ async function main() {
       update: {
         provider: config.provider,
         modelId: config.modelId,
+        isActive: true,
       },
       create: {
         role: config.role,
         provider: config.provider,
         modelId: config.modelId,
+        isActive: true,
       },
     });
   }

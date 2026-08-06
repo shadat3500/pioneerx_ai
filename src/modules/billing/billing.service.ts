@@ -29,6 +29,7 @@ export class BillingService {
         interval: true,
         label: true,
         amount: true,
+        compareAtAmount: true,
         currency: true,
       },
     });

@@ -17,8 +17,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -28,7 +26,6 @@ yarn-error.log*
 Thumbs.db
 
 # IDE Files
-.vscode
 .idea
 *.swp
 *.swo
@@ -44,3 +41,6 @@ db-commands.txt
 docker-commands.txt
 .logs.a3bf6aa0b8cd8fc1b0fb32925ede00716175f78d-audit.json
 .logs.bd882826cb2a9b912f36df4eb584b4c66c560fd8-audit.json
+
+/APP_API_INTEGRATION_GUIDE.md
+config.bat
