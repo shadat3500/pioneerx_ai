@@ -34,4 +34,16 @@ export class UpdateCreditConfigDto {
   @IsInt()
   @Min(0)
   trialCredits?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'Max images per day for this tier. null = unlimited (credits still apply; 40 credits/image).',
+    example: 10,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(0)
+  dailyImageLimit?: number | null;
 }

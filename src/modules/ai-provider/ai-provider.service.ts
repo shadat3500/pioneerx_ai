@@ -39,6 +39,10 @@ export class AiProviderService {
       throw new Error(`AI configuration not found for role: ${role}`);
     }
 
+    if (!config.isActive) {
+      throw new Error(`AI configuration for role ${role} is inactive`);
+    }
+
     const configData = {
       provider: config.provider,
       modelId: config.modelId,

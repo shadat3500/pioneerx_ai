@@ -72,10 +72,14 @@ Home / Dashboard
   └─ GET /sections  (each item has isLocked)
 
 Section chat (e.g. Branding, Idea Validation)
-  ├─ GET /conversations/{sectionKey}
-  ├─ POST /conversations/{sectionKey}/message   ← main chat
+  ├─ GET /conversations/{sectionKey}     ← active session (empty after re-login)
+  ├─ POST /conversations/session/reset   ← call once after login
+  ├─ POST /conversations/{sectionKey}/new
+  ├─ POST /conversations/{sectionKey}/message
   ├─ POST /image/generate  (optional, with sectionKey)
-  └─ GET /image/generations/{id}  (reload chat images)
+  ├─ GET /image/generations/{id}
+  ├─ GET /saved-outputs
+  └─ POST /saved-outputs/{id}/open       ← restore saved chat into active session
 
 Profile / multi-business
   ├─ GET|PATCH /profile
@@ -170,8 +174,17 @@ Use `sectionKey` everywhere (examples: `idea_validation`, `branding`, `marketing
 
 `GET /conversations/{sectionKey}`
 
-- Finds or creates conversation for `{ userId, activeProfileId, section }`.
-- Returns conversation + messages (oldest → newest).
+- Returns the **active** conversation for `{ userId, activeProfileId, section }` (see v1.5 §18).
+- If none is active (e.g. right after login reset), creates a **new empty** thread.
+- After logout → login the app must call `POST /conversations/session/reset` so chats start fresh. Saved outputs are untouched; conversations are **not** deleted.
+
+**Restore a save into the chat:**
+
+`POST /saved-outputs/{id}/open` → sets that thread active and returns the conversation payload. Continue chatting; the next `POST /generations/{id}/save` **updates** that SavedOutput.
+
+**Start another blank thread in the same login:**
+
+`POST /conversations/{sectionKey}/new`
 
 **Image messages in history:**  
 assistant `imageUrl` may be `"image-generation:{uuid}"` (not a full data URL).  
@@ -264,7 +277,7 @@ Also refresh meter from `creditStatus` on message / image responses.
 
 - `type`: `"logo"` \| `"business_card"`
 - `sectionKey` optional — if set, also appends messages into that section’s chat
-- Cost: **40** credits + daily image quota
+- Cost: **40** credits + optional daily image cap from `CreditConfig.dailyImageLimit` (tier-based; `null` = unlimited)
 - Provider: **Gemini** (not DALL·E)
 
 Response includes `imageUrl`, `imageGenerationId`, `creditStatus`, and optionally `userMessage` / `assistantMessage`.
@@ -313,7 +326,7 @@ Reload later: `GET /image/generations/{imageGenerationId}`
 
 ## 12. What you can skip (unless building Admin)
 
-All `/admin/*` routes (sections, AI configs, prompts, quotas, pricings, credit configs, promo CRUD, review moderation, broadcast, token dashboard, admin users).  
+All `/admin/*` routes (sections, AI configs, prompts, credit configs incl. `dailyImageLimit`, stripe prices, promo CRUD, review moderation, broadcast, site pages, payments, token dashboard, admin users). Quota admin routes are retired.  
 Use Admin JWT from `POST /admin/auth/login`, not the user access token.
 
 ---
@@ -353,14 +366,16 @@ Two providers, one `Subscription` record:
 Stripe endpoints:
 
 ```
-GET  /billing/plans                → public: [{ priceId, tier, interval, amount, currency, label }]
+GET  /billing/plans                → public: [{ priceId, tier, interval, amount, compareAtAmount, currency, label }]
 POST /billing/checkout-session     → auth: { priceId } or { tier, interval } → { url, sessionId }
 POST /billing/portal-session       → auth: → { url }  (manage / cancel)
 GET  /billing/checkout-session/:id → auth: confirm status on the success page
 GET  /billing/payments             → auth: payment history
 ```
 
-`amount` is in **minor units** (cents) — divide by 100 for display. Send the user to the returned `url`; entitlement is granted by webhook, so re-fetch `GET /subscription/me` and `GET /credit-status` after returning. If Stripe is not configured on the server these return **503**.
+`amount` and optional `compareAtAmount` are in **minor units** (cents) — divide by 100 for display. Show `amount` as the sale price; when `compareAtAmount` is set, render it crossed-out as the “was” price. Stripe still charges the linked `priceId`. Send the user to the returned `url`; entitlement is granted by webhook, so re-fetch `GET /subscription/me` and `GET /credit-status` after returning. If Stripe is not configured on the server these return **503**.
+
+Public promo list (website footer / promo page): `GET /promo-codes` (no auth).
 
 ---
 
