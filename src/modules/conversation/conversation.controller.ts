@@ -11,15 +11,39 @@ import { SectionAccessGuard } from '../generation/guards/section-access.guard';
 export class ConversationController {
   constructor(private readonly conversationService: ConversationService) {}
 
+  @Post('session/reset')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Clear active chat pointers after login (does not delete conversations or saved outputs)',
+  })
+  resetSession(@GetCurrentUser('sub') userId: string) {
+    return this.conversationService.resetSession(userId);
+  }
+
   @Get(':sectionKey')
   @UseGuards(SectionAccessGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Get or create conversation for active profile + section' })
+  @ApiOperation({
+    summary:
+      'Get active conversation for profile + section (creates empty thread if none active)',
+  })
   getOrCreate(
     @GetCurrentUser('sub') userId: string,
     @Param('sectionKey') sectionKey: string,
   ) {
     return this.conversationService.getOrCreate(userId, sectionKey);
+  }
+
+  @Post(':sectionKey/new')
+  @UseGuards(SectionAccessGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start a fresh empty conversation for this section' })
+  startFresh(
+    @GetCurrentUser('sub') userId: string,
+    @Param('sectionKey') sectionKey: string,
+  ) {
+    return this.conversationService.startFresh(userId, sectionKey);
   }
 
   @Post(':sectionKey/message')
