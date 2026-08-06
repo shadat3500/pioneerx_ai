@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateStripePriceDto {
@@ -34,7 +35,7 @@ export class CreateStripePriceDto {
   label?: string;
 
   @ApiPropertyOptional({
-    description: 'Amount in minor units (cents) — display only',
+    description: 'Current/sale amount in minor units (cents) — display only',
     example: 1499,
   })
   @IsOptional()
@@ -42,6 +43,19 @@ export class CreateStripePriceDto {
   @IsInt()
   @Min(0)
   amount?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Crossed-out / “was” price in minor units (cents). Shown with line-through on the website.',
+    example: 2099,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  compareAtAmount?: number | null;
 
   @ApiPropertyOptional({ example: 'usd' })
   @IsOptional()
@@ -70,12 +84,23 @@ export class UpdateStripePriceDto {
   @IsString()
   label?: string;
 
-  @ApiPropertyOptional({ description: 'Amount in minor units (cents)' })
+  @ApiPropertyOptional({ description: 'Current/sale amount in minor units (cents)' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   amount?: number;
+
+  @ApiPropertyOptional({
+    description: 'Crossed-out / “was” price in cents. Pass null to clear.',
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  compareAtAmount?: number | null;
 
   @ApiPropertyOptional()
   @IsOptional()

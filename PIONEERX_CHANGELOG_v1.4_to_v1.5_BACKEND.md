@@ -1,6 +1,12 @@
 # PioneerX — Change Log: v1.4 → v1.5 (Backend)
 
 > This document is for the coding agent. The existing codebase was built from v1.4. The items below describe **only what is new or changed**. Do not touch anything not mentioned here. Items marked **[COMMENT OUT]** must be commented out, never deleted.
+>
+> **Post-v1.5 follow-ups (synced with code + Postman):**
+> - Daily image limit lives on **`CreditConfig.dailyImageLimit`** (not `QuotaConfig`). Admin quota routes are retired / commented out.
+> - Website pricing crossed-out price uses **`StripePrice.compareAtAmount`** (cents), returned by `GET /billing/plans`.
+> - Chat sessions: fresh empty chat after re-login; saved outputs restore/continue; save updates same item — see **§18**. Do not delete conversations on logout.
+> - Companion: `PioneerX AI API v1.5.postman_collection.json`, `APP_API_INTEGRATION_GUIDE.md`.
 
 ---
 
@@ -103,11 +109,15 @@ Also add relation to `User` model:
 notifications Notification[]
 ```
 
-### 1f. Update `QuotaConfig` — add image limit field
+### 1f. Image daily limit — on `CreditConfig` (not Quota)
 
-Add to existing `QuotaConfig` model:
+> **Supersedes earlier draft** that put `dailyImageLimit` on `QuotaConfig`. Product decision: quotas retired as the product gate; credits own budget + image caps.
+
+`QuotaConfig.dailyImageLimit` may still exist in schema for legacy rows, but **runtime enforcement and Admin UI use `CreditConfig` only**. Admin `/admin/quota-configs` routes are **[COMMENT OUT]**.
+
+Add to `CreditConfig` (see also §2d):
 ```prisma
-dailyImageLimit Int? // null = unlimited
+dailyImageLimit Int? // null = unlimited images/day (still costs 40 credits each)
 ```
 
 ### 1g. Update `AiModelConfig` — add IMAGE_GENERATOR role
@@ -142,20 +152,9 @@ model BusinessProfile {
 
 On new user creation (handled in auth, see §4), not in seed. Seed only the config.
 
-### 2b. Seed `QuotaConfig` — add image limits and credit limits
+### 2b. Seed `QuotaConfig` — optional / legacy only
 
-Update existing `QuotaConfig` upserts to include new fields:
-
-```ts
-const quotaConfigs = [
-  { tier: 'FREE',     dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 3,  dailyCreditLimit: 500  },
-  { tier: 'PRO',      dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 10, dailyCreditLimit: null },
-  { tier: 'PRO_PLUS', dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 20, dailyCreditLimit: null },
-  { tier: 'ELITE',    dailyTokenLimit: null, dailyRegenerateLimit: null, dailyImageLimit: 30, dailyCreditLimit: null },
-];
-```
-
-Monthly credit limits per tier (stored separately in a new `CreditConfig` — see §2c).
+Quota admin + chat `assertQuota` are **[COMMENT OUT]**. Keep existing `QuotaConfig` seed rows if present (token/regenerate fields), but **do not** treat them as the image/credit product gate. Image limits seed under `CreditConfig` (§2d).
 
 ### 2c. Seed `AiModelConfig` — add IMAGE_GENERATOR role
 
@@ -173,12 +172,13 @@ Add a new `CreditConfig` table (add to schema as well):
 
 ```prisma
 model CreditConfig {
-  id             String           @id @default(uuid())
-  tier           SubscriptionTier @unique
-  monthlyCredits Int?             // null = daily reset applies instead
-  dailyCredits   Int?             // used for Free and Trial
-  trialCredits   Int?             // daily credits during trial period
-  updatedAt      DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  tier            SubscriptionTier @unique
+  monthlyCredits  Int?             // null = daily reset applies instead
+  dailyCredits    Int?             // used for Free and Trial
+  trialCredits    Int?             // daily credits during trial period
+  dailyImageLimit Int?             // null = unlimited; still costs credits per image
+  updatedAt       DateTime         @updatedAt
 }
 ```
 
@@ -186,10 +186,10 @@ Seed values:
 ```ts
 await prisma.creditConfig.createMany({
   data: [
-    { tier: 'FREE',     monthlyCredits: null,   dailyCredits: 500,    trialCredits: 2000 },
-    { tier: 'PRO',      monthlyCredits: 15000,  dailyCredits: null,   trialCredits: null },
-    { tier: 'PRO_PLUS', monthlyCredits: 27000,  dailyCredits: null,   trialCredits: null },
-    { tier: 'ELITE',    monthlyCredits: 60000,  dailyCredits: null,   trialCredits: null },
+    { tier: 'FREE',     monthlyCredits: null,   dailyCredits: 500,    trialCredits: 2000, dailyImageLimit: 3  },
+    { tier: 'PRO',      monthlyCredits: 15000,  dailyCredits: null,   trialCredits: null, dailyImageLimit: 10 },
+    { tier: 'PRO_PLUS', monthlyCredits: 27000,  dailyCredits: null,   trialCredits: null, dailyImageLimit: 20 },
+    { tier: 'ELITE',    monthlyCredits: 60000,  dailyCredits: null,   trialCredits: null, dailyImageLimit: 30 },
   ],
   skipDuplicates: true,
 });
@@ -449,10 +449,10 @@ Body: { prompt: string, type: "logo" | "business_card" }
 ```
 
 Logic:
-1. Check daily image limit: count today's `ImageGeneration` rows for this user. If `count >= QuotaConfig.dailyImageLimit` → 403.
+1. Check daily image limit from **`CreditConfig.dailyImageLimit`** for the user's tier (`null` = unlimited). Count today's `ImageGeneration` rows for this user. If `count >= dailyImageLimit` → 403. (Applies immediately when admin changes the config.)
 2. Check credit balance: image costs 40 credits. `CreditService.checkBalance(userId, 40)`. If not allowed → 402.
 3. Reserve 40 credits.
-4. Call DALL-E 3 via OpenAI SDK with the user's prompt + type context.
+4. Call the configured `IMAGE_GENERATOR` model (Gemini image in production; earlier draft said DALL·E).
 5. On success: confirm reservation, save `ImageGeneration` row, return `{ imageUrl }`.
 6. On failure: refund reservation, return error.
 7. Include `creditStatus` in response.
@@ -480,16 +480,18 @@ Notifications are created by:
 Add these pages. Do not modify existing pages.
 
 ### 10a. Credit Config Manager
-- View and edit `CreditConfig` per tier (monthlyCredits, dailyCredits, trialCredits).
-- Changes take effect on next reset cycle.
+- View and edit `CreditConfig` per tier (`monthlyCredits`, `dailyCredits`, `trialCredits`, **`dailyImageLimit`**).
+- Credit amount changes take effect on next reset cycle; **`dailyImageLimit` applies immediately**.
 
 ### 10b. Broadcast Notification
 - Form: select type (`model_update` | `platform_update`), enter message.
 - On submit: create `Notification` rows for all active users.
 - Endpoint: `POST /admin/notifications/broadcast`
 
-### 10c. Image Limit Manager
-- Already covered by existing `QuotaConfig` admin page — add `dailyImageLimit` field there.
+### 10c. Image Limit Manager — merged into Credits
+- **Do not** use a separate Quotas admin page for image caps.
+- Admin Quotas nav/routes redirected or removed; `/admin/quota-configs` **[COMMENT OUT]**.
+- Edit `dailyImageLimit` on **Admin → Credits** (`PATCH /admin/credit-configs/:id`).
 
 ---
 
@@ -608,20 +610,20 @@ Frontend uses `isLocked` to grey out sections and show upgrade prompt.
 |---|---|
 | Modify | `prisma/schema.prisma` — §1a–1g + §1h Business Brief fields |
 | Migrate | Run `prisma migrate dev` |
-| Modify | `prisma/seed.ts` — CreditConfig, IMAGE_GENERATOR, QuotaConfig image limits |
+| Modify | `prisma/seed.ts` — CreditConfig (+ dailyImageLimit), IMAGE_GENERATOR |
 | Modify | `src/auth/auth.service.ts` — create CreditBalance on registration |
 | Create | `src/credit/credit.service.ts` + `credit.module.ts` |
 | Create | BullMQ daily reset jobs for Free + Trial credit |
-| Modify | `src/conversation/conversation.service.ts` — credit check, auto-generation, cross-section context, Shared Business Brief (§15) |
+| Modify | `src/conversation/conversation.service.ts` — credit check, auto-generation, cross-section context, Shared Business Brief (§15); quota assert **[COMMENT OUT]** |
 | Modify | `src/section/section.service.ts` — fix section query bug, add isLocked |
 | Modify | Saved outputs endpoint — fix section filter + conversation include |
 | Modify | Generation create — ensure conversationId always set |
-| Create | `src/image/image.service.ts` + `image.controller.ts` |
+| Create | `src/image/image.service.ts` + `image.controller.ts` — enforce CreditConfig.dailyImageLimit + 40 credits |
 | Create | `src/notification/notification.controller.ts` |
 | Modify | RevenueCat webhook handler — call creditService.resetOnBillingCycle |
-| Create | Admin: Credit Config Manager page |
+| Create | Admin: Credit Config Manager page (includes dailyImageLimit) |
 | Create | Admin: Broadcast Notification page |
-| Modify | Admin: QuotaConfig page — add dailyImageLimit field |
+| Comment out | Admin: QuotaConfig routes/page — retired; image limit on Credits |
 | Create | `src/promo/promo.service.ts` + `promo.controller.ts` |
 | Modify | `src/auth/auth.service.ts` — optional promo code on registration |
 | Create | Admin: Promo Code Manager page |
@@ -818,7 +820,7 @@ PATCH /admin/site-pages/:slug  → update `{ title?, body }` (admin JWT)
 ### 16f. Related admin / infra notes (same release window)
 
 - Admin dashboard uses live `GET /admin/dashboard-stats` (no mock KPI data)
-- Admin Settings hub: Credits, Quotas (`dailyImageLimit`), Promos, Reviews, Broadcast, Site pages
+- Admin Settings hub: Credits (`dailyImageLimit`), Promos, Reviews, Broadcast, Site pages, Billing (Stripe prices). Quotas page retired.
 - Pagination DTO: `@Type(() => Number)` so `page` / `limit` query params validate
 - Dev CORS / Vite proxy: admin may call API via `/api/v1` proxy to avoid HTTPS HSTS redirect blocking preflight
 - Google OAuth callback redirects to `{FRONTEND_URL}/auth/google/callback?access_token=&refresh_token=` then app routes to dashboard
@@ -883,20 +885,23 @@ Add price → tier mapping (admin-editable, replaces hardcoded product matching)
 
 ```prisma
 model StripePrice {
-  id        String           @id @default(uuid())
-  priceId   String           @unique // price_xxx from Stripe dashboard
-  tier      SubscriptionTier
-  interval  String           @default("month") // "month" | "year"
-  label     String?          // "Pro monthly"
-  amount    Int?             // minor units, display only
-  currency  String           @default("usd")
-  isActive  Boolean          @default(true)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id              String           @id @default(uuid())
+  priceId         String           @unique // price_xxx from Stripe dashboard
+  tier            SubscriptionTier
+  interval        String           @default("month") // "month" | "year"
+  label           String?          // "Pro monthly"
+  amount          Int?             // minor units (cents) — sale / current display price
+  compareAtAmount Int?             // minor units (cents) — crossed-out “was” price on website
+  currency        String           @default("usd")
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("stripe_prices")
 }
 ```
+
+`amount` / `compareAtAmount` are **website display only**. Stripe still charges the linked `priceId`.
 
 Webhook idempotency ledger (shared by both providers):
 
@@ -956,12 +961,15 @@ Apply with `npx prisma db push`.
 ### 17e. Endpoints
 
 ```
-GET  /billing/plans              → public: active StripePrice rows (tier, interval, amount, label)
+GET  /billing/plans              → public: active StripePrice rows (tier, interval, amount, compareAtAmount, label, currency)
 POST /billing/checkout-session   → auth: { priceId } | { tier, interval } → { url, sessionId }
 POST /billing/portal-session     → auth: → { url }   (manage/cancel card + subscription)
+GET  /billing/checkout-session/:id → auth: confirm status on success page
 GET  /billing/payments           → auth: user's PaymentRecord history
 POST /webhooks/stripe            → public, raw body, Stripe-Signature verified
 ```
+
+Website pricing cards: show `amount` as the main price; when `compareAtAmount` is set, show it with line-through (“was” price).
 
 Checkout session details:
 - `mode: "subscription"`, `line_items: [{ price, quantity: 1 }]`
@@ -1010,13 +1018,13 @@ Stripe handlers apply the mirror-image rule. RevenueCat writes also set `provide
 
 ```
 GET    /admin/stripe-prices        → list mappings
-POST   /admin/stripe-prices        → { priceId, tier, interval, label?, amount?, currency? }
-PATCH  /admin/stripe-prices/:id    → update tier / label / amount / isActive
+POST   /admin/stripe-prices        → { priceId, tier, interval, label?, amount?, compareAtAmount?, currency?, isActive? }
+PATCH  /admin/stripe-prices/:id    → update tier / label / amount / compareAtAmount / isActive (null clears compareAtAmount)
 DELETE /admin/stripe-prices/:id    → remove mapping
 GET    /admin/payments?page=&limit= → paginated payment history (all providers)
 ```
 
-Admin Panel page **Billing** (`/billing`, sidebar + Settings card): paste the `price_...` id from the Stripe dashboard, pick tier + interval + amount, enable/disable or delete a mapping, and review recent payments.
+Admin Panel page **Billing** (`/billing`, sidebar + Settings card): paste the `price_...` id from the Stripe dashboard, pick tier + interval + **amount** + optional **compare-at** (crossed-out) price, enable/disable or delete a mapping, and review recent payments.
 
 ### 17i. Frontend / app integration
 
@@ -1073,3 +1081,102 @@ Still open (needs the client's real Stripe account):
 | Profile menu + credit meter | Link to `/billing` |
 
 RevenueCat remains mobile-app only — no website SDK.
+
+---
+
+## 18. Chat sessions vs Saved Outputs (fresh on re-login) — NEW
+
+> Client change: after **logout → login**, section chatboxes must feel **brand new / empty**. **Saved outputs stay**. Opening a saved output **restores that conversation into the chat** so the user can continue. Saving again **updates that same saved output** (does not create a duplicate). **Do not delete** conversations on logout.
+
+### 18a. Product rules
+
+| Rule | Behavior |
+|---|---|
+| Re-login | Chat UI starts empty (new active session). No prior unsaved thread auto-loaded. |
+| Saved outputs | Persist across logout/login. |
+| Click saved #N | Replace the active chat with that saved conversation’s messages; continue chatting there. |
+| Save again after restore | Update the **same** `SavedOutput` row to the latest generation (new messages stay on that conversation). |
+| Logout cleanup | **Do not delete** conversations (avoids multi-device / accidental-logout data loss). Orphans may remain; they are simply not active. |
+
+### 18b. Schema
+
+**File:** `prisma/schema.prisma`
+
+1. Remove the single-thread uniqueness on `Conversation` so one section can have many threads (one per save / session):
+
+```prisma
+model Conversation {
+  // ...existing fields...
+  // REMOVE: @@unique([userId, businessProfileId, sectionId])
+  @@index([userId, businessProfileId, sectionId])
+  @@map("conversations")
+}
+```
+
+2. Add an **active session pointer** (what the UI loads). Optional link to the saved output being continued:
+
+```prisma
+model ActiveConversation {
+  id                String          @id @default(uuid())
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessProfileId String
+  businessProfile   BusinessProfile @relation(fields: [businessProfileId], references: [id], onDelete: Cascade)
+  sectionId         String
+  section           Section         @relation(fields: [sectionId], references: [id])
+  conversationId    String
+  conversation      Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// When set, the next Save updates this SavedOutput instead of creating a new one
+  savedOutputId     String?
+  savedOutput       SavedOutput?    @relation(fields: [savedOutputId], references: [id], onDelete: SetNull)
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([userId, businessProfileId, sectionId])
+  @@map("active_conversations")
+}
+```
+
+Add reverse relations on `User`, `BusinessProfile`, `Section`, `Conversation`, `SavedOutput` as needed.
+
+Apply with `npx prisma db push` (or migrate).
+
+### 18c. API behavior
+
+```
+GET  /conversations/:sectionKey
+  → Return the ActiveConversation’s thread (messages + latestGeneration).
+  → If no active row: create a **new empty** Conversation + ActiveConversation (savedOutputId = null).
+  → Never auto-load an old unsaved thread just because one exists for the section.
+
+POST /conversations/session/reset
+  → Clear all ActiveConversation rows for the current user.
+  → Call this after successful login (magic-link verify, Google, password). Does **not** delete Conversation / Message / SavedOutput rows.
+
+POST /conversations/:sectionKey/new
+  → Start a fresh empty conversation for this section; clear savedOutputId on the active pointer.
+
+POST /saved-outputs/:id/open
+  → Auth required. Load that SavedOutput’s generation.conversation.
+  → Set ActiveConversation for that section to that conversationId and savedOutputId = this save.
+  → Return the conversation payload (same shape as GET /conversations/:sectionKey) so the chat UI can replace in place.
+
+POST /generations/:id/save
+  → If ActiveConversation.savedOutputId is set for this section:
+      update that SavedOutput to point at the new generationId (label/savedAt refresh);
+      mark previous generation isSaved=false, new one isSaved=true.
+  → Else: create/upsert SavedOutput as today, then set ActiveConversation.savedOutputId.
+```
+
+### 18d. Frontend
+
+- After login success → `POST /conversations/session/reset`, then invalidate conversation queries.
+- Section chat: `GET /conversations/:sectionKey` as today (now returns fresh empty after reset).
+- Saved list click → `POST /saved-outputs/:id/open` → replace main chat messages (remove read-only modal-only restore).
+- Save button → existing save endpoint (backend decides create vs update).
+- Optional: “New chat” → `POST /conversations/:sectionKey/new`.
+
+### 18e. What not to do
+
+- Do **not** hard-delete conversations on logout.
+- Do **not** keep `@@unique([userId, businessProfileId, sectionId])` — it blocks one-save-one-thread restore.
+- Master Spec v1.0 / v1.1 remain historical; this section is the source of truth for the session model.

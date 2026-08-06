@@ -11,7 +11,8 @@ import { ConversationRepository } from './conversation.repository';
 import { AiProviderService } from '../ai-provider/ai-provider.service';
 import { TokenService } from '../token/token.service';
 import { BusinessProfileService } from '../business-profile/business-profile.service';
-import { DailyTaskService } from '../daily-task/daily-task.service';
+// Client: daily-task sync disabled on chat — keep import for easy re-enable.
+// import { DailyTaskService } from '../daily-task/daily-task.service';
 import { CreditService } from '../credit/credit.service';
 import { BusinessBriefService } from '../business-profile/business-brief.service';
 import {
@@ -38,7 +39,8 @@ export class ConversationService {
     private readonly tokenService: TokenService,
     private readonly businessProfileService: BusinessProfileService,
     private readonly businessBriefService: BusinessBriefService,
-    private readonly dailyTaskService: DailyTaskService,
+    // Client: daily-task sync disabled — keep for easy re-enable with syncFromGeneration.
+    // private readonly dailyTaskService: DailyTaskService,
     private readonly creditService: CreditService,
   ) {}
 
@@ -49,17 +51,143 @@ export class ConversationService {
     }
 
     const profile = await this.businessProfileService.resolveActiveProfile(userId);
-    let conversation = await this.repository.findConversation(userId, profile.id, section.id);
+    const pointer = await this.repository.findActivePointer(
+      userId,
+      profile.id,
+      section.id,
+    );
 
-    if (!conversation) {
-      conversation = await this.repository.createConversation(userId, profile.id, section.id);
+    let conversation = pointer
+      ? await this.repository.findConversationById(pointer.conversationId)
+      : null;
+
+    // Stale pointer (conversation deleted) or no active session → fresh empty thread
+    if (!conversation || conversation.userId !== userId) {
+      conversation = await this.repository.createConversation(
+        userId,
+        profile.id,
+        section.id,
+      );
+      await this.repository.upsertActivePointer({
+        userId,
+        businessProfileId: profile.id,
+        sectionId: section.id,
+        conversationId: conversation.id,
+        savedOutputId: null,
+      });
     }
 
+    return this.formatConversationResponse(conversation, pointer?.savedOutputId ?? null);
+  }
+
+  /** Clear active chat pointers after login — does not delete conversations. */
+  async resetSession(userId: string) {
+    await this.repository.clearActivePointersForUser(userId);
+    return { reset: true };
+  }
+
+  /** Start a brand-new empty chat for this section (same login session). */
+  async startFresh(userId: string, sectionKey: string) {
+    const section = await this.repository.findSectionByKey(sectionKey);
+    if (!section || !section.isActive) {
+      throw new NotFoundException(`Section not found: ${sectionKey}`);
+    }
+
+    const profile = await this.businessProfileService.resolveActiveProfile(userId);
+    const conversation = await this.repository.createConversation(
+      userId,
+      profile.id,
+      section.id,
+    );
+    await this.repository.upsertActivePointer({
+      userId,
+      businessProfileId: profile.id,
+      sectionId: section.id,
+      conversationId: conversation.id,
+      savedOutputId: null,
+    });
+
+    return this.formatConversationResponse(conversation, null);
+  }
+
+  /**
+   * Restore a saved output into the section chat so the user can continue.
+   * Sets ActiveConversation.savedOutputId so the next Save updates that row.
+   */
+  async openSavedOutput(userId: string, savedOutputId: string) {
+    const saved = await this.repository.findSavedOutputForOpen(savedOutputId, userId);
+
+    if (!saved) {
+      throw new NotFoundException('Saved output not found');
+    }
+
+    let conversation = saved.generation.conversation;
+    if (!conversation) {
+      // Legacy save without conversation — create a fresh thread but keep savedOutputId linked
+      conversation = await this.repository.createConversation(
+        userId,
+        saved.businessProfileId,
+        saved.generation.sectionId,
+      );
+    }
+
+    await this.repository.upsertActivePointer({
+      userId,
+      businessProfileId: saved.businessProfileId,
+      sectionId: saved.generation.sectionId,
+      conversationId: conversation.id,
+      savedOutputId: saved.id,
+    });
+
+    const formatted = this.formatConversationResponse(conversation, saved.id);
+    if (!formatted.latestGeneration && saved.generation) {
+      return {
+        ...formatted,
+        savedOutputId: saved.id,
+        latestGeneration: {
+          id: saved.generation.id,
+          aggregatedResult: saved.generation.aggregatedResult,
+          actionSteps: saved.generation.actionSteps,
+          isSaved: true,
+          createdAt: saved.generation.createdAt,
+        },
+        label: saved.label,
+      };
+    }
+
+    return {
+      ...formatted,
+      savedOutputId: saved.id,
+      label: saved.label,
+    };
+  }
+
+  private formatConversationResponse(
+    conversation: {
+      id: string;
+      userId: string;
+      businessProfileId: string;
+      sectionId: string;
+      createdAt: Date;
+      updatedAt: Date;
+      messages?: unknown[];
+      section?: unknown;
+      generations?: Array<{
+        id: string;
+        aggregatedResult: unknown;
+        actionSteps: unknown;
+        isSaved: boolean;
+        createdAt: Date;
+      }>;
+    },
+    savedOutputId: string | null,
+  ) {
     const latestGeneration = conversation.generations?.[0] ?? null;
     const { generations: _generations, ...rest } = conversation;
 
     return {
       ...rest,
+      savedOutputId,
       latestGeneration: latestGeneration
         ? {
             id: latestGeneration.id,
@@ -79,7 +207,8 @@ export class ConversationService {
     }
 
     const tier = user.subscription?.tier ?? SubscriptionTier.FREE;
-    await this.assertQuota(userId, tier, user.trialEndsAt);
+    // Quotas removed — usage is gated by credits only.
+    // await this.assertQuota(userId, tier, user.trialEndsAt);
 
     const isTrialActive = !!(user.trialEndsAt && user.trialEndsAt > new Date());
     const useFullPipeline = isTrialActive || tier !== SubscriptionTier.FREE;
@@ -231,7 +360,7 @@ export class ConversationService {
     systemPrompt: string;
     useFullPipeline: boolean;
   }) {
-    const { userId, sectionKey, conversationId, sectionId, profile, systemPrompt } = params;
+    const { userId, conversationId, sectionId, profile, systemPrompt } = params;
 
     const last10 = await this.repository.findLastMessages(conversationId, 10);
     if (last10.length === 0) {
@@ -280,7 +409,14 @@ export class ConversationService {
       });
     }
 
-    await this.dailyTaskService.syncFromGeneration(userId, profile.id, generation.id, sectionKey);
+    // Client: do not generate/sync daily tasks during chat/generation.
+    // Keep the call commented — do not delete (re-enable later if needed).
+    // await this.dailyTaskService.syncFromGeneration(
+    //   userId,
+    //   profile.id,
+    //   generation.id,
+    //   params.sectionKey,
+    // );
 
     return {
       generationId: generation.id,
@@ -320,7 +456,8 @@ Never act as a general chatbot, coding tutor, or multi-section consultant in thi
     }
 
     const tier = user.subscription?.tier ?? SubscriptionTier.FREE;
-    await this.assertQuota(userId, tier, user.trialEndsAt);
+    // Quotas removed — usage is gated by credits only.
+    // await this.assertQuota(userId, tier, user.trialEndsAt);
 
     const conversation = await this.getOrCreate(userId, sectionKey);
     const profile = await this.businessProfileService.resolveActiveProfile(userId);
@@ -384,12 +521,14 @@ Never act as a general chatbot, coding tutor, or multi-section consultant in thi
       });
     }
 
-    await this.dailyTaskService.syncFromGeneration(
-      userId,
-      profile.id,
-      generation.id,
-      sectionKey,
-    );
+    // Client: do not generate/sync daily tasks during chat/generation.
+    // Keep the call commented — do not delete (re-enable later if needed).
+    // await this.dailyTaskService.syncFromGeneration(
+    //   userId,
+    //   profile.id,
+    //   generation.id,
+    //   sectionKey,
+    // );
 
     const tokenStatus = await this.tokenService.getTokenStatus(userId, tier, user.trialEndsAt);
 
@@ -401,28 +540,29 @@ Never act as a general chatbot, coding tutor, or multi-section consultant in thi
     };
   }
 
-  private async assertQuota(
-    userId: string,
-    tier: SubscriptionTier,
-    trialEndsAt: Date | null | undefined,
-  ) {
-    const quotaCheck = await this.tokenService.checkDailyQuota(userId, tier, trialEndsAt);
-    if (!quotaCheck.allowed) {
-      throw new HttpException(
-        {
-          limitReached: true,
-          resetAt: quotaCheck.resetAt,
-          tokenStatus: {
-            used: quotaCheck.used,
-            limit: quotaCheck.limit,
-            percentage: quotaCheck.percentage,
-            resetAt: quotaCheck.resetAt,
-          },
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
+  // Quotas removed — credits are the only usage gate.
+  // private async assertQuota(
+  //   userId: string,
+  //   tier: SubscriptionTier,
+  //   trialEndsAt: Date | null | undefined,
+  // ) {
+  //   const quotaCheck = await this.tokenService.checkDailyQuota(userId, tier, trialEndsAt);
+  //   if (!quotaCheck.allowed) {
+  //     throw new HttpException(
+  //       {
+  //         limitReached: true,
+  //         resetAt: quotaCheck.resetAt,
+  //         tokenStatus: {
+  //           used: quotaCheck.used,
+  //           limit: quotaCheck.limit,
+  //           percentage: quotaCheck.percentage,
+  //           resetAt: quotaCheck.resetAt,
+  //         },
+  //       },
+  //       HttpStatus.TOO_MANY_REQUESTS,
+  //     );
+  //   }
+  // }
 
   private buildChatPrompt(
     profile: {

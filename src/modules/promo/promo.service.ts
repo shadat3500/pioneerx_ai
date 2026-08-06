@@ -81,6 +81,36 @@ export class PromoService {
   }
 
   // ─────────────────────────────────────────────
+  // Public — active codes for website listing
+  // ─────────────────────────────────────────────
+
+  async listActivePublicPromoCodes() {
+    const now = new Date();
+    const rows = await this.prisma.promoCode.findMany({
+      where: {
+        isActive: true,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        code: true,
+        trialDays: true,
+        expiresAt: true,
+        maxUses: true,
+        usedCount: true,
+      },
+    });
+
+    return rows
+      .filter((row) => row.maxUses === null || row.usedCount < row.maxUses)
+      .map(({ code, trialDays, expiresAt }) => ({
+        code,
+        trialDays,
+        expiresAt,
+      }));
+  }
+
+  // ─────────────────────────────────────────────
   // 12d. Admin promo code management
   // ─────────────────────────────────────────────
 
@@ -116,5 +146,15 @@ export class PromoService {
         ...(dto.expiresAt !== undefined && { expiresAt: new Date(dto.expiresAt) }),
       },
     });
+  }
+
+  async deletePromoCode(id: string) {
+    const existing = await this.prisma.promoCode.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Promo code not found');
+    }
+
+    await this.prisma.promoCode.delete({ where: { id } });
+    return { deleted: true, id };
   }
 }
