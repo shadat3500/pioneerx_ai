@@ -4,7 +4,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Stripe from 'stripe';
+// Stripe v22 CJS: default import compiles to `.default` and breaks at runtime on Nest.
+import Stripe = require('stripe');
 
 /**
  * Thin wrapper around the Stripe SDK.

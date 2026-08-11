@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { SubscriptionTier } from '@prisma/client';
-import Stripe from 'stripe';
+import Stripe = require('stripe');
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreditService } from '../credit/credit.service';
 import { StripeClient } from './stripe.client';
