@@ -2652,6 +2652,44 @@
           "response": []
         },
         {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/me",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Current user name, email, avatarUrl (Google photo saved on Google login, else null → demo avatar)."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete My Account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{url}}/auth/me",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Permanently deletes the authenticated user. Stripe sub is cancelled if present. Store (RevenueCat) billing is not cancelled."
+          },
+          "response": []
+        },
+        {
           "name": "Forgot Password",
           "request": {
             "method": "POST",
