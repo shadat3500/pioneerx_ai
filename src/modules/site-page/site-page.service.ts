@@ -82,7 +82,7 @@ We use data to provide and improve PioneerX, personalize advice for your active 
 We do not sell personal data. We may use infrastructure and AI providers under contract to operate features you request.
 
 4. Your choices
-You may request account deletion or data access by contacting support.
+You can delete your account in the website or app: Account → Delete my account. You may also request data access by contacting support.
 
 5. Contact
 privacy@pioneerx.ai

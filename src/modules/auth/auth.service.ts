@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { BusinessProfileService } from '../business-profile/business-profile.service';
 import { CreditService } from '../credit/credit.service';
 import { PromoService } from '../promo/promo.service';
+import { StripeClient } from '../billing/stripe.client';
 
 @Injectable()
 export class AuthService {
@@ -32,6 +34,7 @@ export class AuthService {
     private businessProfileService: BusinessProfileService,
     private creditService: CreditService,
     private promoService: PromoService,
+    private stripeClient: StripeClient,
   ) {}
 
   /** v1.5 — shared post-creation setup: business profile + credit balance. */
@@ -99,7 +102,11 @@ export class AuthService {
     return tokens;
   }
 
-  async oauthLogin(profile: { email?: string; name?: string }) {
+  async oauthLogin(profile: {
+    email?: string;
+    name?: string;
+    avatarUrl?: string;
+  }) {
     if (!profile.email) {
       throw new BadRequestException('Email not provided by OAuth provider');
     }
@@ -114,6 +121,7 @@ export class AuthService {
         email: profile.email,
         passwordHash: hash,
         name: profile.name,
+        avatarUrl: profile.avatarUrl || null,
         isEmailVerified: true,
         trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       });
@@ -125,6 +133,11 @@ export class AuthService {
       } catch (err) {
         this.logger.error(`OAuth welcome email failed for ${user.email}: ${(err as any).message}`);
       }
+    } else if (profile.avatarUrl && user.avatarUrl !== profile.avatarUrl) {
+      user = await this.usersRepo.update(user.id, {
+        avatarUrl: profile.avatarUrl,
+        ...(profile.name && !user.name ? { name: profile.name } : {}),
+      });
     }
 
     const tokens = await this.getTokens(user.id, user.email);
@@ -213,6 +226,68 @@ export class AuthService {
     await this.usersRepo.update(userId, { hashedRt: null });
   }
 
+  async getMe(userId: string) {
+    const user = await this.usersRepo.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatarUrl: user.avatarUrl || null,
+    };
+  }
+
+  /**
+   * Self-serve account deletion (App Store / Play / website).
+   * Cancels Stripe subscription if present, then hard-deletes the user.
+   * Store (RevenueCat) subscriptions must be cancelled by the user in
+   * App Store / Play settings — we cannot cancel those from this API.
+   */
+  async deleteMyAccount(userId: string) {
+    const user = await this.usersRepo.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { userId },
+    });
+
+    if (
+      subscription?.stripeSubscriptionId &&
+      this.stripeClient.isEnabled
+    ) {
+      try {
+        await this.stripeClient.stripe.subscriptions.cancel(
+          subscription.stripeSubscriptionId,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Stripe cancel on account delete failed for ${userId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    await this.prisma.magicLinkToken.deleteMany({
+      where: { email: user.email },
+    });
+
+    try {
+      await this.redis.del(
+        `otp:forgot-password:${user.email}`,
+        `otp:verify-email:${user.email}`,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Redis cleanup on account delete failed for ${user.email}: ${(err as Error).message}`,
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id: userId } });
+
+    this.logger.log(`Deleted account ${userId} (${user.email})`);
+    return { deleted: true };
+  }
+
   async refreshTokens(userId: string, rt: string) {
     const user = await this.usersRepo.findById(userId);
 
@@ -288,12 +363,12 @@ export class AuthService {
       });
 
       await this.initializeNewUser(user.id);
-
-      if (dto.promoCode) {
-        await this.promoService.tryApplyAtRegistration(user.id, dto.promoCode);
-      }
     } else if (isDevMagicUser && user.trialEndsAt !== null) {
       await this.usersRepo.update(user.id, { trialEndsAt: null });
+    }
+
+    if (dto.promoCode) {
+      await this.promoService.tryApplyAtRegistration(user.id, dto.promoCode);
     }
 
     if (isDevMagicUser) {
@@ -317,7 +392,10 @@ export class AuthService {
 
     // Build verification URL
     const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const verifyLink = `${frontendUrl}/auth/verify?token=${token}`;
+    const promoQuery = dto.promoCode
+      ? `&promo=${encodeURIComponent(dto.promoCode.trim())}`
+      : '';
+    const verifyLink = `${frontendUrl}/auth/verify?token=${token}${promoQuery}`;
 
     // Send email (non-blocking — error is logged but does not crash)
     try {

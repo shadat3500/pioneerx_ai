@@ -46,6 +46,61 @@ export class CreditService {
     return this.prisma.creditConfig.findUnique({ where: { tier } });
   }
 
+  private isPaidActive(tier: SubscriptionTier, status?: string | null) {
+    const paid =
+      tier === SubscriptionTier.PRO ||
+      tier === SubscriptionTier.PRO_PLUS ||
+      tier === SubscriptionTier.ELITE;
+    return paid && (!status || status === 'active' || status === 'trialing');
+  }
+
+  /**
+   * Paid checkout must end the free trial and grant monthly credits.
+   * Also repairs Elite/Pro users who paid but still have 0 trial credits
+   * (which locked the chat input on the frontend).
+   */
+  async activatePaidPlan(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { subscription: true },
+    });
+    if (!user?.subscription) return;
+    if (!this.isPaidActive(user.subscription.tier, user.subscription.status)) {
+      return;
+    }
+
+    if (user.trialEndsAt) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { trialEndsAt: null },
+      });
+    }
+
+    const config = await this.getCreditConfig(user.subscription.tier);
+    if (!config?.monthlyCredits) return;
+
+    const lastReset = await this.prisma.creditTransaction.findFirst({
+      where: { userId, type: 'reset' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const desc = lastReset?.description ?? '';
+    const needsGrant =
+      !lastReset ||
+      desc.includes('trial') ||
+      desc === 'daily reset';
+
+    if (needsGrant) {
+      await this.resetBalance(
+        userId,
+        config.monthlyCredits,
+        'billing reset',
+      );
+      this.logger.log(
+        `Granted ${config.monthlyCredits} ${user.subscription.tier} credits to ${userId}`,
+      );
+    }
+  }
+
   // ─────────────────────────────────────────────
   // 3a. checkBalance
   // ─────────────────────────────────────────────
@@ -164,6 +219,8 @@ export class CreditService {
   // ─────────────────────────────────────────────
 
   async getStatus(userId: string): Promise<CreditStatus> {
+    await this.activatePaidPlan(userId);
+
     const record = await this.ensureBalance(userId);
 
     const user = await this.prisma.user.findUnique({
@@ -173,24 +230,28 @@ export class CreditService {
     if (!user) throw new NotFoundException('User not found');
 
     const tier = user.subscription?.tier ?? SubscriptionTier.FREE;
-    const isTrialActive = !!(user.trialEndsAt && user.trialEndsAt > new Date());
+    const paidActive = this.isPaidActive(tier, user.subscription?.status);
+    const isTrialActive =
+      !paidActive && !!(user.trialEndsAt && user.trialEndsAt > new Date());
 
-    const config = await this.getCreditConfig(isTrialActive ? SubscriptionTier.FREE : tier);
+    const config = await this.getCreditConfig(
+      isTrialActive ? SubscriptionTier.FREE : tier,
+    );
 
     let limit: number | null = null;
     let resetAt: Date;
 
-    if (isTrialActive) {
-      limit = config?.trialCredits ?? config?.dailyCredits ?? null;
-      resetAt = this.getNextMidnight();
-    } else if (tier === SubscriptionTier.FREE) {
-      limit = config?.dailyCredits ?? null;
-      resetAt = this.getNextMidnight();
-    } else {
+    if (paidActive || (tier !== SubscriptionTier.FREE && !isTrialActive)) {
       limit = config?.monthlyCredits ?? null;
       resetAt =
         user.subscription?.renewsAt ??
         new Date(new Date(record.lastResetAt).setMonth(record.lastResetAt.getMonth() + 1));
+    } else if (isTrialActive) {
+      limit = config?.trialCredits ?? config?.dailyCredits ?? null;
+      resetAt = this.getNextMidnight();
+    } else {
+      limit = config?.dailyCredits ?? null;
+      resetAt = this.getNextMidnight();
     }
 
     const used = limit !== null ? Math.max(limit - record.balance, 0) : 0;
