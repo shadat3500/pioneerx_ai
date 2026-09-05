@@ -90,6 +90,8 @@ Profile / multi-business
 Account extras
   ├─ POST /auth/apply-promo
   ├─ GET /subscription/me
+  ├─ GET /auth/me             ← name, email, avatarUrl
+  ├─ DELETE /auth/me          ← delete my account (permanent)
   ├─ POST /reviews  /  GET /reviews (public approved)
   └─ POST /auth/refresh  when access expires
 ```
@@ -130,7 +132,36 @@ Account extras
 
 `POST /auth/logout` (Bearer access) → clear local tokens.
 
-### 3.5 Promo after login
+### 3.5 Get my profile
+
+`GET /auth/me` (Bearer access). No body.
+
+```json
+{
+  "id": "...",
+  "name": "Rup",
+  "email": "you@mail.com",
+  "avatarUrl": "https://lh3.googleusercontent.com/a/..."
+}
+```
+
+`avatarUrl` is the **Google account photo**, saved on **Google Sign-In**. Magic-link / Apple / password login does not receive Gmail’s picture — then `avatarUrl` is `null` and the app should show the demo `user.png`.
+
+Existing users get a photo on their **next Google login**.
+
+### 3.6 Delete my account (required for App Store / Play)
+
+`DELETE /auth/me` (Bearer access)
+
+- Deletes **only the logged-in user** (never pass someone else’s id).
+- Removes the user row and cascaded data (profiles, chats, credits, etc.).
+- If they have a **Stripe** subscription, the API tries to cancel it first.
+- **RevenueCat / App Store / Play** subscriptions are **not** cancelled here. Show this copy in the confirm UI: *Cancel App Store / Google Play subscriptions in store settings, or billing may continue.*
+- On success: `{ "deleted": true }` inside `data`. Then wipe local tokens and send the user to the signed-out screen.
+
+Do **not** use `DELETE /users/{id}` from the app.
+
+### 3.7 Promo after login
 
 `POST /auth/apply-promo` Body: `{ "code": "LAUNCH30" }` (authenticated).
 

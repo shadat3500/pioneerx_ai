@@ -31,7 +31,13 @@ export class CreditResetService {
     // 5b — active trial users
     if (config.trialCredits != null) {
       const trialUsers = await this.prisma.user.findMany({
-        where: { trialEndsAt: { gt: now } },
+        where: {
+          trialEndsAt: { gt: now },
+          OR: [
+            { subscription: null },
+            { subscription: { tier: SubscriptionTier.FREE } },
+          ],
+        },
         select: { id: true },
       });
 

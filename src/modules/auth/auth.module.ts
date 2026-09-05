@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { BusinessProfileModule } from '../business-profile/business-profile.module';
 import { CreditModule } from '../credit/credit.module';
 import { PromoModule } from '../promo/promo.module';
+import { BillingModule } from '../billing/billing.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 
@@ -52,6 +53,7 @@ function oauthProviders() {
     BusinessProfileModule,
     CreditModule,
     PromoModule,
+    BillingModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AtStrategy, RtStrategy, ...oauthProviders()],
