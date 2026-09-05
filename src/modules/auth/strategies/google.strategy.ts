@@ -27,13 +27,15 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     profile: {
       name?: { givenName?: string; familyName?: string };
       emails?: { value: string }[];
+      photos?: { value: string }[];
     },
   ) {
     const email = profile.emails?.[0]?.value;
     const name = [profile.name?.givenName, profile.name?.familyName]
       .filter(Boolean)
       .join(' ');
+    const avatarUrl = profile.photos?.[0]?.value || undefined;
 
-    return { email, name: name || undefined };
+    return { email, name: name || undefined, avatarUrl };
   }
 }

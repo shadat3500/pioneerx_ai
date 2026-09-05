@@ -127,12 +127,14 @@ export class StripeWebhookService {
     const subscription =
       await this.stripeClient.stripe.subscriptions.retrieve(subscriptionId);
     await this.syncFromStripeSubscription(userId, subscription);
+    await this.creditService.activatePaidPlan(userId);
   }
 
   private async onSubscriptionChanged(subscription: Stripe.Subscription) {
     const userId = await this.resolveUserId(subscription);
     if (!userId) return;
     await this.syncFromStripeSubscription(userId, subscription);
+    await this.creditService.activatePaidPlan(userId);
   }
 
   private async onSubscriptionDeleted(subscription: Stripe.Subscription) {
