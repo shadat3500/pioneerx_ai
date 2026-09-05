@@ -54,6 +54,7 @@ model User {
   email           String    @unique
   passwordHash    String
   name            String?
+  avatarUrl       String?
   isEmailVerified Boolean   @default(false)
   hashedRt        String?   // for refresh token rotation
   trialEndsAt     DateTime?

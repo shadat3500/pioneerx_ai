@@ -13,13 +13,21 @@ export class PromoService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeCode(code: string) {
+    return code.trim().toUpperCase();
+  }
+
   // ─────────────────────────────────────────────
   // 12b. Apply promo code (user)
   // ─────────────────────────────────────────────
 
   async applyPromoCode(userId: string, code: string) {
+    const normalized = this.normalizeCode(code);
     const promo = await this.prisma.promoCode.findFirst({
-      where: { code, isActive: true },
+      where: {
+        isActive: true,
+        code: { equals: normalized, mode: 'insensitive' },
+      },
     });
 
     if (!promo) {
@@ -123,7 +131,7 @@ export class PromoService {
   async createPromoCode(dto: CreatePromoCodeDto) {
     return this.prisma.promoCode.create({
       data: {
-        code: dto.code.trim(),
+        code: this.normalizeCode(dto.code),
         trialDays: dto.trialDays,
         maxUses: dto.maxUses ?? null,
         expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,

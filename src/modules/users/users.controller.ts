@@ -39,6 +39,8 @@ export class UsersController {
   }
 
   @Delete(':id')
+  @UseGuards(AdminAuthGuard)
+  @Public()
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
