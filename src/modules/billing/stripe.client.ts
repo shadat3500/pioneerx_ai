@@ -69,7 +69,7 @@ export class StripeClient {
   get portalReturnUrl(): string {
     return (
       this.config.get<string>('STRIPE_PORTAL_RETURN_URL') ||
-      `${this.frontendUrl}/dashboard`
+      `${this.frontendUrl}/idea-validation`
     );
   }
 
