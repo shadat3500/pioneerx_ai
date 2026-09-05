@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -57,6 +58,26 @@ export class AuthController {
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   logout(@GetCurrentUser('sub') userId: string) {
     return this.authService.logout(userId);
+  }
+
+  @ApiBearerAuth()
+  @Get('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Get the authenticated user (name, email, avatar)',
+  })
+  getMe(@GetCurrentUser('sub') userId: string) {
+    return this.authService.getMe(userId);
+  }
+
+  @ApiBearerAuth()
+  @Delete('me')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Permanently delete the authenticated user account',
+  })
+  deleteMyAccount(@GetCurrentUser('sub') userId: string) {
+    return this.authService.deleteMyAccount(userId);
   }
 
   @Public()
@@ -116,7 +137,9 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth callback — redirects to frontend with tokens' })
   async googleAuthCallback(
-    @Req() req: { user: { email?: string; name?: string } },
+    @Req() req: {
+      user: { email?: string; name?: string; avatarUrl?: string };
+    },
     @Res() res: Response,
   ) {
     const tokens = await this.authService.oauthLogin(req.user);
@@ -127,7 +150,7 @@ export class AuthController {
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
     });
-    // Frontend /auth/google/callback stores tokens then router.replace("/dashboard")
+    // Frontend /auth/google/callback stores tokens then routes to Idea & Validation
     res.redirect(`${frontendUrl}/auth/google/callback?${params.toString()}`);
   }
 
